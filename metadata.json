@@ -1,0 +1,7 @@
+{
+  "name": "DefScribe - Advanced Dictation AI",
+  "description": "An advanced speech recognition and dictation tool featuring real-time transcription, AI-powered summarization, speech analytics, and an immersive visualization interface.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

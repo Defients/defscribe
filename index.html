@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DefScribe - Advanced Dictation AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+      :root {
+        --color-primary: #00d9ff;
+        --color-secondary: #d462ff;
+        --color-accent: #4dffd4;
+        --color-primary-rgb: 0, 217, 255;
+        --color-secondary-rgb: 212, 98, 255;
+        --panel-bg-color: rgba(15, 23, 42, 0.5);
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #0a1218;
+        background-image: url('https://defscribe.app/defbg_hd.png');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .font-roboto-mono {
+        font-family: 'Roboto Mono', monospace;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: linear-gradient(to bottom, var(--color-primary), var(--color-accent));
+        opacity: 0.5;
+        border-radius: 8px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        opacity: 0.8;
+      }
+      @keyframes pulseBorder {
+        0%, 100% { box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 rgba(0,217,255,0); }
+        50% { box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), 0 0 10px var(--color-primary); opacity: 0.6; }
+      }
+      .listening-pulse {
+        animation: pulseBorder 2s infinite;
+      }
+      @keyframes mic-pulse {
+        0% { transform: scale(1); }
+        100% { transform: scale(1.2); }
+      }
+      .mic-pulse-animation {
+        animation: mic-pulse 1s infinite alternate;
+      }
+      @keyframes pulse-recording {
+        0%, 100% { box-shadow: 0 4px 12px rgba(220, 50, 50, 0.4); }
+        50% { box-shadow: 0 4px 20px rgba(220, 50, 50, 0.6); }
+      }
+      .recording-shadow {
+        animation: pulse-recording 2s infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .spinner-animation {
+        animation: spin 0.8s linear infinite;
+      }
+      .drag-handle {
+        cursor: move; /* fallback */
+        cursor: grab;
+      }
+      .drag-handle:active {
+        cursor: grabbing;
+      }
+      @keyframes float-idle {
+        0%, 100% { transform: translate(0, 0) rotate(-5deg); }
+        50% { transform: translate(10px, -15px) rotate(0deg); }
+      }
+      @keyframes scribble-active {
+          0% { transform: translate(0, 0) rotate(-5deg); }
+          25% { transform: translate(-8px, 4px) rotate(-8deg); }
+          50% { transform: translate(5px, -5px) rotate(-2deg); }
+          75% { transform: translate(8px, -2px) rotate(-6deg); }
+          100% { transform: translate(0, 0) rotate(-5deg); }
+      }
+      @keyframes easter-egg-spin {
+          0% { transform: rotate(-5deg) scale(1); }
+          50% { transform: rotate(355deg) scale(1.2); }
+          100% { transform: rotate(715deg) scale(1); }
+      }
+      @keyframes glow-listening {
+        0%, 100% { box-shadow: 0 0 5px rgba(77, 255, 212, 0); }
+        50% { box-shadow: 0 0 20px 5px rgba(77, 255, 212, 0.7); }
+      }
+      @keyframes scribble {
+        0% { transform: rotate(0deg) translateX(0); }
+        20% { transform: rotate(-5deg) translateX(-2px); }
+        40% { transform: rotate(5deg) translateX(2px); }
+        60% { transform: rotate(-5deg) translateX(-2px); }
+        80% { transform: rotate(5deg) translateX(2px); }
+        100% { transform: rotate(0deg) translateX(0); }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .fade-in-entry {
+        animation: fadeIn 0.5s ease-out forwards;
+      }
+      .resizer-handle {
+        cursor: col-resize;
+        width: 5px;
+        background-color: transparent;
+        transition: background-color 0.2s ease;
+        z-index: 30;
+      }
+      .resizer-handle:hover {
+        background-color: var(--color-primary);
+        opacity: 0.5;
+      }
+      body.resizing {
+        cursor: col-resize;
+        user-select: none;
+      }
+      mark {
+        background-color: var(--color-accent);
+        color: #0a1218;
+        padding: 0 2px;
+        border-radius: 3px;
+      }
+      @keyframes skeleton-loading {
+        0% { background-position: -200px 0; }
+        100% { background-position: calc(200px + 100%) 0; }
+      }
+      .skeleton-loader {
+        background-color: #1f2937;
+        background-image: linear-gradient(90deg, #1f2937, #374151, #1f2937);
+        background-size: 200px 100%;
+        background-repeat: no-repeat;
+        border-radius: 4px;
+        animation: skeleton-loading 1.5s infinite;
+      }
+      /* Immersive Mode Animations */
+      @keyframes glow-pulse-once {
+        0%, 100% { box-shadow: 0 0 5px var(--color-primary, #00d9ff); opacity: 0.7; }
+        50% { box-shadow: 0 0 15px 3px var(--color-primary, #00d9ff); opacity: 1; }
+      }
+      .immersive-button-glowing {
+        animation: glow-pulse-once 3s ease-in-out;
+        border: 1px solid var(--color-primary, #00d9ff);
+      }
+      @keyframes immersive-fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes bubble-pop-in {
+        from { opacity: 0; transform: scale(0.5); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes bubble-pop-out {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0; transform: scale(0.5); }
+      }
+      @keyframes line-scroll-up {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(-100%); }
+      }
+      @keyframes cursor-blink {
+        50% { opacity: 0; }
+      }
+      @keyframes char-slide-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.14.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
