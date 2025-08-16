@@ -1,12 +1,19 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { type SummaryStyle, type Emotion, type ActionItem, type Snippet } from '../types';
 import { AVATAR_EMOTIONS } from '../constants';
 
-if (!process.env.API_KEY) {
+const API_KEY = typeof process !== 'undefined' && process.env?.API_KEY;
+let ai: GoogleGenAI | null = null;
+
+if (API_KEY) {
+    try {
+        ai = new GoogleGenAI({ apiKey: API_KEY });
+    } catch (e) {
+        console.error("Failed to initialize GoogleGenAI", e);
+    }
+} else {
   console.warn("Gemini API key not found. Summarization will be disabled. Make sure to set the API_KEY environment variable.");
 }
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 const getPromptForStyle = (style: SummaryStyle, text: string): string => {
   const emotionInstruction = `First, analyze the overall emotional tone of the speaker. On the very first line, respond with the single dominant emotion from this list: normal, happy, sad, surprised, confused. The format must be 'EMOTION: [emotion]'. Then, on a new line, provide the summary as requested below.`;
@@ -24,7 +31,7 @@ const getPromptForStyle = (style: SummaryStyle, text: string): string => {
 };
 
 export const generateSummary = async (transcript: string, style: SummaryStyle): Promise<{ summary: string; emotion: Emotion }> => {
-  if (!process.env.API_KEY) {
+  if (!ai) {
     return Promise.resolve({
       summary: "Summarization is disabled. Please configure your Gemini API key.",
       emotion: 'confused'
@@ -34,7 +41,7 @@ export const generateSummary = async (transcript: string, style: SummaryStyle): 
   const prompt = getPromptForStyle(style, transcript);
 
   try {
-    const response = await ai.models.generateContent({
+    const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
     });
@@ -64,7 +71,7 @@ export const generateSummary = async (transcript: string, style: SummaryStyle): 
 
 
 export const generateTopics = async (transcript: string): Promise<string[]> => {
-    if (!process.env.API_KEY || transcript.trim().length < 50) {
+    if (!ai || transcript.trim().length < 50) {
         return Promise.resolve([]);
     }
 
@@ -101,7 +108,7 @@ export const generateTopics = async (transcript: string): Promise<string[]> => {
 };
 
 export const generateActionItems = async (transcript: string): Promise<Omit<ActionItem, 'id'>[]> => {
-    if (!process.env.API_KEY || transcript.trim().length < 20) {
+    if (!ai || transcript.trim().length < 20) {
         return Promise.resolve([]);
     }
     
@@ -135,7 +142,7 @@ export const generateActionItems = async (transcript: string): Promise<Omit<Acti
 };
 
 export const generateSnippets = async (transcript: string): Promise<Omit<Snippet, 'id'>[]> => {
-    if (!process.env.API_KEY || transcript.trim().length < 50) {
+    if (!ai || transcript.trim().length < 50) {
         return Promise.resolve([]);
     }
     
@@ -169,7 +176,7 @@ export const generateSnippets = async (transcript: string): Promise<Omit<Snippet
 };
 
 export const translateText = async (text: string, language: string): Promise<string> => {
-    if (!process.env.API_KEY || !text.trim()) {
+    if (!ai || !text.trim()) {
         return "";
     }
     const prompt = `Translate the following text to ${language}: "${text}"`;
@@ -187,7 +194,7 @@ export const translateText = async (text: string, language: string): Promise<str
 
 export const analyzeTranscriptChunk = async (chunk: string): Promise<{ topic: string; sentiment: 'positive' | 'neutral' | 'negative' }> => {
     const fallback = { topic: 'General', sentiment: 'neutral' as const };
-    if (!process.env.API_KEY || !chunk.trim()) {
+    if (!ai || !chunk.trim()) {
         return fallback;
     }
     const prompt = `Analyze the following transcript chunk for its main topic and overall sentiment (positive, neutral, or negative). Respond with a JSON object. Chunk: "${chunk}"`;

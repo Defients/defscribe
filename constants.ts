@@ -1,4 +1,5 @@
 
+
 import { type Emotion } from './types';
 
 export const FILLER_WORDS: Set<string> = new Set([
@@ -15,11 +16,11 @@ export const STOP_WORDS: Set<string> = new Set([
 ]);
 
 export const THEME_PRESETS: { [key: number]: { primary: string; secondary:string; accent: string } } = {
-  1: { primary: "#00d9ff", secondary: "#d462ff", accent: "#4dffd4" },
-  2: { primary: "#4dffd4", secondary: "#00d9ff", accent: "#ffbe0b" },
-  3: { primary: "#d462ff", secondary: "#4dffd4", accent: "#00d9ff" },
-  4: { primary: "#ff6b6b", secondary: "#ffbe0b", accent: "#4dffd4" },
-  5: { primary: "#ffbe0b", secondary: "#ff6b6b", accent: "#00d9ff" }
+  1: { primary: "#4d8aff", secondary: "#a777ff", accent: "#ffc94d" }, // CosmoTech Default
+  2: { primary: "#4dffd4", secondary: "#4d8aff", accent: "#ff6b6b" }, // Cyan Nebula
+  3: { primary: "#a777ff", secondary: "#ff6b6b", accent: "#4dffd4" }, // Violet Flare
+  4: { primary: "#ffbe0b", secondary: "#4d8aff", accent: "#ff6b6b" }, // Gold Supernova
+  5: { primary: "#ff6b6b", secondary: "#a777ff", accent: "#ffc94d" }  // Crimson Void
 };
 
 export const AVATAR_EMOTIONS: Record<Emotion, string> = {

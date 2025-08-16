@@ -26,10 +26,11 @@ export interface Snippet {
 }
 
 export interface ChatMessage {
-  id: string;
+  id:string;
   role: 'user' | 'model';
   text: string;
   isLoading?: boolean;
+  translatedText?: string;
 }
 
 export interface TimelineEvent {
@@ -45,20 +46,17 @@ export type Emotion = 'normal' | 'talking' | 'thinking' | 'happy' | 'sad' | 'sur
 
 export interface SpeechAnalytics {
   wpm: number;
-  accuracy: number;
+  clarity: number; // based on speech recognition confidence
   fillers: number;
-  duration: number;
+  duration: number; // in seconds
   words: number;
   sentences: number;
   pauses: number;
-  clarity: number;
   speakingRateLabel: 'Slow' | 'Medium' | 'Fast';
   emotionalTone: Emotion;
   emotionHistory: Emotion[];
   topics: string[];
   talkTime: Record<SpeakerId, { percentage: number; seconds: number }>;
-  interruptions: number;
-  timelineEvents: TimelineEvent[];
 }
 
 export type VisualizerStyle = 'wave' | 'bars' | 'circle';

@@ -33,18 +33,16 @@ const BackgroundPenLogo: React.FC<BackgroundPenLogoProps> = ({ isListening, isSu
 
     return (
         <div 
-            className="fixed inset-0 z-10 flex items-center justify-center pointer-events-none"
+            className="flex justify-center transition-opacity duration-500"
+            style={{ opacity: isListening || isSummarizing ? '1' : '0.7' }}
             aria-hidden="true"
         >
-            <div 
-                className="relative w-[70vh] h-[70vh] max-w-[600px] max-h-[600px] opacity-10 transition-opacity duration-500"
-                style={{ opacity: isListening || isSummarizing ? '0.2' : '0.1' }}
-            >
+            <div className="relative w-64 h-64">
                 <img
                     src="https://static.wixstatic.com/media/2ef790_8834bc46053541f9b07873cdb91f5649~mv2.png"
                     alt="DefScribe Pen"
                     onClick={handleEasterEgg}
-                    className="w-full h-full object-contain drop-shadow-2xl pointer-events-auto cursor-pointer"
+                    className="w-full h-full object-contain drop-shadow-2xl cursor-pointer"
                     style={animationStyle}
                 />
             </div>

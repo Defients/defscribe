@@ -9,21 +9,38 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
       :root {
-        --color-primary: #00d9ff;
-        --color-secondary: #d462ff;
-        --color-accent: #4dffd4;
-        --color-primary-rgb: 0, 217, 255;
-        --color-secondary-rgb: 212, 98, 255;
-        --panel-bg-color: rgba(15, 23, 42, 0.5);
+        --color-primary: #4d8aff;
+        --color-secondary: #a777ff;
+        --color-accent: #ffc94d;
+        --color-primary-rgb: 77, 138, 255;
+        --color-secondary-rgb: 167, 119, 255;
+        --color-accent-rgb: 255, 201, 77;
+        --color-bg-deep: #05080a;
+        --panel-bg-color: rgba(10, 18, 24, 0.6);
       }
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #0a1218;
-        background-image: url('https://defscribe.app/defbg_hd.png');
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        background-color: var(--color-bg-deep);
+        color: #e2e8f0;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+      }
+      body::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-image:
+          linear-gradient(rgba(var(--color-primary-rgb), 0.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.1) 1px, transparent 1px),
+          linear-gradient(rgba(var(--color-primary-rgb), 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.05) 1px, transparent 1px);
+        background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+        background-position: -1px -1px, -1px -1px, -1px -1px, -1px -1px;
+        z-index: -10;
+        opacity: 0.5;
       }
       .font-roboto-mono {
         font-family: 'Roboto Mono', monospace;
@@ -33,57 +50,43 @@
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: rgba(0, 0, 0, 0.15);
+        background: rgba(var(--color-primary-rgb), 0.1);
         border-radius: 8px;
       }
       ::-webkit-scrollbar-thumb {
-        background: linear-gradient(to bottom, var(--color-primary), var(--color-accent));
-        opacity: 0.5;
+        background: linear-gradient(to bottom, var(--color-primary), var(--color-secondary));
+        opacity: 0.7;
         border-radius: 8px;
         border: 2px solid transparent;
         background-clip: content-box;
       }
       ::-webkit-scrollbar-thumb:hover {
-        opacity: 0.8;
+        opacity: 1;
       }
-      @keyframes pulseBorder {
-        0%, 100% { box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), 0 0 0 rgba(0,217,255,0); }
-        50% { box-shadow: inset 0 1px 3px rgba(0,0,0,0.3), 0 0 10px var(--color-primary); opacity: 0.6; }
+      /* CosmoTech Animations */
+      @keyframes aurora-pan {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
       }
-      .listening-pulse {
-        animation: pulseBorder 2s infinite;
+      @keyframes cosmic-glow {
+        0%, 100% { box-shadow: 0 0 5px rgba(var(--color-primary-rgb), 0.2), 0 0 10px rgba(var(--color-primary-rgb), 0.2); }
+        50% { box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.4), 0 0 20px rgba(var(--color-primary-rgb), 0.3); }
       }
-      @keyframes mic-pulse {
-        0% { transform: scale(1); }
-        100% { transform: scale(1.2); }
-      }
-      .mic-pulse-animation {
-        animation: mic-pulse 1s infinite alternate;
-      }
-      @keyframes pulse-recording {
-        0%, 100% { box-shadow: 0 4px 12px rgba(220, 50, 50, 0.4); }
-        50% { box-shadow: 0 4px 20px rgba(220, 50, 50, 0.6); }
-      }
-      .recording-shadow {
-        animation: pulse-recording 2s infinite;
+      @keyframes recording-glow {
+        0%, 100% { box-shadow: 0 0 8px rgba(255, 82, 82, 0.5), 0 0 16px rgba(255, 82, 82, 0.4); }
+        50% { box-shadow: 0 0 16px rgba(255, 82, 82, 0.8), 0 0 32px rgba(255, 82, 82, 0.6); }
       }
       @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
       }
       .spinner-animation {
-        animation: spin 0.8s linear infinite;
-      }
-      .drag-handle {
-        cursor: move; /* fallback */
-        cursor: grab;
-      }
-      .drag-handle:active {
-        cursor: grabbing;
+        animation: spin 1s linear infinite;
       }
       @keyframes float-idle {
-        0%, 100% { transform: translate(0, 0) rotate(-5deg); }
-        50% { transform: translate(10px, -15px) rotate(0deg); }
+        0%, 100% { transform: translate(0, 0) rotate(-5deg); filter: drop-shadow(0 0 15px rgba(var(--color-primary-rgb), 0.3)); }
+        50% { transform: translate(10px, -15px) rotate(0deg); filter: drop-shadow(0 0 25px rgba(var(--color-secondary-rgb), 0.4)); }
       }
       @keyframes scribble-active {
           0% { transform: translate(0, 0) rotate(-5deg); }
@@ -97,18 +100,6 @@
           50% { transform: rotate(355deg) scale(1.2); }
           100% { transform: rotate(715deg) scale(1); }
       }
-      @keyframes glow-listening {
-        0%, 100% { box-shadow: 0 0 5px rgba(77, 255, 212, 0); }
-        50% { box-shadow: 0 0 20px 5px rgba(77, 255, 212, 0.7); }
-      }
-      @keyframes scribble {
-        0% { transform: rotate(0deg) translateX(0); }
-        20% { transform: rotate(-5deg) translateX(-2px); }
-        40% { transform: rotate(5deg) translateX(2px); }
-        60% { transform: rotate(-5deg) translateX(-2px); }
-        80% { transform: rotate(5deg) translateX(2px); }
-        100% { transform: rotate(0deg) translateX(0); }
-      }
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
@@ -119,45 +110,51 @@
       .resizer-handle {
         cursor: col-resize;
         width: 5px;
-        background-color: transparent;
-        transition: background-color 0.2s ease;
+        position: relative;
         z-index: 30;
       }
-      .resizer-handle:hover {
-        background-color: var(--color-primary);
+      .resizer-handle::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 2px;
+        width: 1px;
+        height: 100%;
+        background: linear-gradient(to bottom, transparent, rgba(var(--color-primary-rgb), 0.5), transparent);
         opacity: 0.5;
+        transition: all 0.2s ease;
+      }
+      .resizer-handle:hover::before {
+        opacity: 1;
+        transform: scaleX(3);
+        box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.5);
       }
       body.resizing {
         cursor: col-resize;
         user-select: none;
       }
       mark {
-        background-color: var(--color-accent);
+        background-color: rgba(var(--color-accent-rgb), 0.8);
         color: #0a1218;
-        padding: 0 2px;
-        border-radius: 3px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        font-weight: 600;
+        box-shadow: 0 0 8px rgba(var(--color-accent-rgb), 0.5);
       }
       @keyframes skeleton-loading {
         0% { background-position: -200px 0; }
         100% { background-position: calc(200px + 100%) 0; }
       }
       .skeleton-loader {
-        background-color: #1f2937;
-        background-image: linear-gradient(90deg, #1f2937, #374151, #1f2937);
+        background-color: rgba(var(--color-primary-rgb), 0.1);
+        background-image: linear-gradient(90deg, rgba(var(--color-primary-rgb), 0.1), rgba(var(--color-primary-rgb), 0.2), rgba(var(--color-primary-rgb), 0.1));
         background-size: 200px 100%;
         background-repeat: no-repeat;
         border-radius: 4px;
         animation: skeleton-loading 1.5s infinite;
       }
+      
       /* Immersive Mode Animations */
-      @keyframes glow-pulse-once {
-        0%, 100% { box-shadow: 0 0 5px var(--color-primary, #00d9ff); opacity: 0.7; }
-        50% { box-shadow: 0 0 15px 3px var(--color-primary, #00d9ff); opacity: 1; }
-      }
-      .immersive-button-glowing {
-        animation: glow-pulse-once 3s ease-in-out;
-        border: 1px solid var(--color-primary, #00d9ff);
-      }
       @keyframes immersive-fade-in {
         from { opacity: 0; }
         to { opacity: 1; }
@@ -181,14 +178,87 @@
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
       }
+       @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 8px var(--color); }
+        50% { box-shadow: 0 0 16px var(--color), 0 0 20px var(--color); }
+      }
+
+      /* CosmoTech Additions */
+      .cosmo-panel {
+        background: var(--panel-bg-color);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid;
+        border-image-source: linear-gradient(to bottom right, rgba(var(--color-primary-rgb), 0.5), rgba(var(--color-secondary-rgb), 0.2));
+        border-image-slice: 1;
+        box-shadow: inset 0 0 40px rgba(var(--color-primary-rgb), 0.1), 0 0 10px rgba(0,0,0,0.5);
+        position: relative;
+        overflow: hidden;
+      }
+      .hex-clip {
+        clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      }
+      .chevron-clip-left {
+        clip-path: polygon(15% 0%, 100% 0%, 100% 100%, 15% 100%, 0% 50%);
+      }
+      .cosmo-button {
+        background: linear-gradient(to right, rgba(var(--color-primary-rgb), 0.15), rgba(var(--color-secondary-rgb), 0.15));
+        border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+        box-shadow: inset 0 0 5px rgba(var(--color-primary-rgb), 0.2);
+        transition: all 0.3s ease;
+      }
+      .cosmo-button:hover:not(:disabled) {
+        border-color: rgba(var(--color-primary-rgb), 0.7);
+        box-shadow: inset 0 0 10px rgba(var(--color-primary-rgb), 0.3), 0 0 15px rgba(var(--color-primary-rgb), 0.4);
+        transform: translateY(-2px);
+      }
+      .control-button {
+        background: rgba(var(--color-primary-rgb), 0.1);
+        border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+        box-shadow: inset 0 1px 2px rgba(var(--color-secondary-rgb), 0.2), 0 0 5px rgba(0,0,0,0.3);
+        transition: all 0.3s ease;
+      }
+      .control-button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        border-color: rgba(var(--color-primary-rgb), 0.6);
+        background: rgba(var(--color-primary-rgb), 0.2);
+        box-shadow: inset 0 1px 2px rgba(var(--color-secondary-rgb), 0.3), 0 0 15px rgba(var(--color-primary-rgb), 0.3);
+      }
+      .stat-card-full {
+        background: rgba(var(--color-secondary-rgb), 0.05);
+        border: 1px solid rgba(var(--color-secondary-rgb), 0.1);
+        box-shadow: inset 0 0 10px rgba(var(--color-secondary-rgb), 0.1);
+        transition: all 0.3s ease;
+      }
+      .stat-card-full:hover {
+        transform: scale(1.02);
+        border-color: rgba(var(--color-primary-rgb), 0.4);
+        background: rgba(var(--color-primary-rgb), 0.1);
+        box-shadow: inset 0 0 10px rgba(var(--color-primary-rgb), 0.1), 0 0 20px rgba(var(--color-primary-rgb), 0.3);
+      }
+      .cosmo-input {
+        background-color: rgba(var(--color-bg-deep), 0.7);
+        border: 1px solid rgba(var(--color-primary-rgb), 0.3);
+        transition: all 0.3s ease;
+      }
+      .cosmo-input:focus {
+        border-color: rgba(var(--color-primary-rgb), 0.7);
+        box-shadow: 0 0 10px rgba(var(--color-primary-rgb), 0.3);
+        background-color: rgba(var(--color-bg-deep), 0.5);
+      }
+      @keyframes flicker {
+        0%, 100% { opacity: 0.5; }
+        50% { opacity: 0.3; }
+      }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.1.1/",
-    "react": "https://esm.sh/react@^19.1.1",
-    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.14.0"
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "@google/genai": "https://esm.sh/@google/genai@^1.14.0",
+    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+    "react/": "https://esm.sh/react@18.3.1/"
   }
 }
 </script>

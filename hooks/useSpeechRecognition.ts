@@ -64,7 +64,10 @@ const useSpeechRecognition = (): SpeechRecognitionHook => {
   const listeningIntentRef = useRef(false);
 
   const startListening = useCallback(() => {
-    if (isListening || !recognitionRef.current) {
+    // The check for `isListening` from state is removed. It's unreliable in the `onend`
+    // callback due to stale closures. The `try/catch` for 'InvalidStateError'
+    // gracefully handles attempts to start an already-running recognition instance.
+    if (!recognitionRef.current) {
       return;
     }
     try {
@@ -82,7 +85,7 @@ const useSpeechRecognition = (): SpeechRecognitionHook => {
         setIsListening(false);
       }
     }
-  }, [isListening]);
+  }, []); // No dependencies, this function is stable.
 
 
   useEffect(() => {

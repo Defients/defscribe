@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { type TranscriptEntry, type Emotion } from '../types';
 import { STOP_WORDS } from '../constants';
@@ -51,11 +50,11 @@ const classifyWord = (word: string): WordType => {
 };
 
 const wordTypeStyles: Record<WordType, { background: string; border: string; boxShadow: string }> = {
-  default: { background: 'linear-gradient(to bottom right, rgba(107, 114, 128, 0.2), rgba(75, 85, 99, 0.2))', border: '1px solid rgba(107, 114, 128, 0.3)', boxShadow: '0 0 10px rgba(107, 114, 128, 0.3)' },
-  action: { background: 'linear-gradient(to bottom right, rgba(14, 165, 233, 0.3), rgba(45, 212, 191, 0.3))', border: '1px solid rgba(45, 212, 191, 0.5)', boxShadow: '0 0 12px rgba(45, 212, 191, 0.5)' },
-  descriptive: { background: 'linear-gradient(to bottom right, rgba(16, 185, 129, 0.3), rgba(52, 211, 153, 0.3))', border: '1px solid rgba(52, 211, 153, 0.5)', boxShadow: '0 0 12px rgba(52, 211, 153, 0.5)' },
-  question: { background: 'linear-gradient(to bottom right, rgba(245, 158, 11, 0.3), rgba(251, 191, 36, 0.3))', border: '1px solid rgba(251, 191, 36, 0.5)', boxShadow: '0 0 12px rgba(251, 191, 36, 0.5)' },
-  important: { background: 'linear-gradient(to bottom right, rgba(239, 68, 68, 0.3), rgba(244, 63, 94, 0.3))', border: '1px solid rgba(244, 63, 94, 0.5)', boxShadow: '0 0 15px rgba(244, 63, 94, 0.6)' },
+  default: { background: 'rgba(107, 114, 128, 0.2)', border: '1px solid rgba(107, 114, 128, 0.4)', boxShadow: '0 0 10px rgba(107, 114, 128, 0.3)' },
+  action: { background: 'rgba(77, 138, 255, 0.2)', border: '1px solid rgba(77, 138, 255, 0.5)', boxShadow: '0 0 12px rgba(77, 138, 255, 0.5)' },
+  descriptive: { background: 'rgba(77, 255, 212, 0.2)', border: '1px solid rgba(77, 255, 212, 0.5)', boxShadow: '0 0 12px rgba(77, 255, 212, 0.5)' },
+  question: { background: 'rgba(255, 201, 77, 0.2)', border: '1px solid rgba(255, 201, 77, 0.5)', boxShadow: '0 0 12px rgba(255, 201, 77, 0.5)' },
+  important: { background: 'rgba(167, 119, 255, 0.3)', border: '1px solid rgba(167, 119, 255, 0.6)', boxShadow: '0 0 15px rgba(167, 119, 255, 0.6)' },
 };
 
 
@@ -148,7 +147,7 @@ const StarfieldBackground: React.FC<{ analyser: AnalyserNode | null }> = React.m
                 warpFactor = (avg / 255) * 10; // Increase speed based on volume
             }
             
-            ctx.fillStyle = "rgba(10, 18, 24, 1)";
+            ctx.fillStyle = "rgba(5, 8, 10, 1)";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -206,7 +205,7 @@ const DigitalRainBackground: React.FC<{ themeColors: { accent: string } }> = Rea
         const drops = Array(columns).fill(1).map(() => Math.random() * canvas.height);
 
         const draw = () => {
-            ctx.fillStyle = 'rgba(10, 18, 24, 0.05)';
+            ctx.fillStyle = 'rgba(5, 8, 10, 0.05)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             ctx.fillStyle = themeColors.accent;
@@ -244,6 +243,9 @@ const CosmicRippleVisualizer: React.FC<{ analyser: AnalyserNode | null }> = Reac
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
         
+        const rootStyle = getComputedStyle(document.documentElement);
+        const primaryRgb = rootStyle.getPropertyValue('--color-primary-rgb').trim();
+
         const setup = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -282,7 +284,9 @@ const CosmicRippleVisualizer: React.FC<{ analyser: AnalyserNode | null }> = Reac
                 
                 ctx.beginPath();
                 ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
-                ctx.strokeStyle = `rgba(0, 217, 255, ${r.alpha})`;
+                if (primaryRgb) {
+                    ctx.strokeStyle = `rgba(${primaryRgb}, ${r.alpha})`;
+                }
                 ctx.lineWidth = 2;
                 ctx.stroke();
             }
@@ -390,6 +394,21 @@ const EnhancedVisualizer: React.FC<{ analyser: AnalyserNode | null; themeColors:
 });
 
 
+const MenuButton: React.FC<{text: string; onClick: () => void; icon: string; isSpecial?: 'red' | 'green'; isActive?: boolean;}> = ({text, onClick, icon, isSpecial, isActive}) => (
+    <Tooltip text={text} position="bottom">
+        <button onClick={onClick} className={`w-20 h-16 text-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 rounded-xl
+            ${isSpecial === 'red' ? 'bg-red-500/80 hover:bg-red-500' :
+            isSpecial === 'green' ? 'bg-green-500/80 hover:bg-green-500' :
+            isActive ? 'bg-[rgba(var(--color-primary-rgb),0.5)]' :
+            'bg-black/40 hover:bg-black/60 backdrop-blur-sm'
+            }`}
+        >
+            <i className={`fas ${icon}`}></i>
+        </button>
+    </Tooltip>
+);
+
+
 // --- Main Immersive Mode Component ---
 
 const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEntries, stream, themeColors, onExit, onToggleListen, onClear, avatarEmotion, avatarMap }) => {
@@ -403,6 +422,7 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
 
   const [showAvatar, setShowAvatar] = useState(true);
   const [avatarSize, setAvatarSize] = useState(1.5);
+  const [avatarGlow, setAvatarGlow] = useState(0);
 
   const bubblesRef = useRef<WordBubble[]>([]);
   const animationFrameRef = useRef<any>(null);
@@ -478,6 +498,15 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
 
   useEffect(() => {
     const animate = () => {
+      if (analyser) {
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        setAvatarGlow(avg / 255);
+      } else {
+        setAvatarGlow(g => Math.max(0, g * 0.95)); // Fade out glow
+      }
+
       const currentBubbles = bubblesRef.current;
       const avatarEl = avatarRef.current;
       const avatarRect = showAvatar && avatarEl ? avatarEl.getBoundingClientRect() : null;
@@ -548,7 +577,7 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
     };
     animationFrameRef.current = requestAnimationFrame(animate);
     return () => { if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current); };
-  }, [showAvatar]);
+  }, [showAvatar, analyser]);
   
   const handleBubbleClick = (id: string) => {
     setBubbles(prev => prev.map(b => b.id === id ? { ...b, isExiting: true } : b));
@@ -559,24 +588,28 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
   const currentLine = liveEntries.length > 0 ? liveEntries[liveEntries.length - 1].text : "Start speaking to see your transcript here...";
   
   return (
-    <div ref={containerRef} className="fixed inset-0 bg-[#0a1218] text-white flex flex-col items-center justify-center overflow-hidden animate-[immersive-fade-in_0.5s_ease-out]">
+    <div ref={containerRef} className="fixed inset-0 bg-[#05080a] text-white flex flex-col items-center justify-center overflow-hidden animate-[immersive-fade-in_0.5s_ease-out]">
       {backgroundType === 'starfield' && <StarfieldBackground analyser={analyser} />}
       {backgroundType === 'digitalRain' && <DigitalRainBackground themeColors={themeColors} />}
       <CosmicRippleVisualizer analyser={analyser} />
       
       {/* --- Controls --- */}
       {isMenuOpen ? (
-          <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-in-out`}>
-            <div className="bg-black/30 backdrop-blur-md rounded-xl p-2 flex justify-center items-center gap-2 border border-slate-700/50 shadow-lg">
-              <Tooltip text="Hide Menu (M)"><button onClick={() => setIsMenuOpen(false)} className="w-14 h-14 text-2xl rounded-lg bg-slate-700/50 hover:bg-slate-700/80 transition-colors"><i className="fas fa-chevron-up"></i></button></Tooltip>
-              <Tooltip text={isListening ? "Stop (Space)" : "Start (Space)"}><button onClick={onToggleListen} className={`w-14 h-14 text-2xl rounded-lg flex items-center justify-center transition-colors ${isListening ? 'bg-red-500/80 hover:bg-red-500' : 'bg-green-500/80 hover:bg-green-500'}`}>{isListening ? <i className="fas fa-stop"></i> : <i className="fas fa-microphone"></i>}</button></Tooltip>
-              <Tooltip text="Clear (C)"><button onClick={onClear} className="w-14 h-14 text-2xl rounded-lg bg-slate-700/50 hover:bg-slate-700/80 transition-colors"><i className="fas fa-trash"></i></button></Tooltip>
-              <Tooltip text="Visuals"><button onClick={() => setIsVisualsPanelOpen(p => !p)} className={`w-14 h-14 text-2xl rounded-lg transition-colors ${isVisualsPanelOpen ? 'bg-[var(--color-primary)]/30' : 'bg-slate-700/50'} hover:bg-slate-700/80`}><i className="fas fa-paint-brush"></i></button></Tooltip>
-              <Tooltip text={isFullscreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)"}><button onClick={toggleFullScreen} className="w-14 h-14 text-2xl rounded-lg bg-slate-700/50 hover:bg-slate-700/80 transition-colors">{isFullscreen ? <i className="fas fa-compress"></i> : <i className="fas fa-expand"></i>}</button></Tooltip>
-              <Tooltip text="Exit (Esc)"><button onClick={onExit} className="w-14 h-14 text-2xl rounded-lg bg-slate-700/50 hover:bg-slate-700/80 transition-colors"><i className="fas fa-times-circle"></i></button></Tooltip>
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-in-out`}>
+            <div className="flex flex-col items-center gap-3 p-3 bg-black/30 backdrop-blur-md rounded-2xl border border-slate-700/50" style={{ filter: `drop-shadow(0 0 10px rgba(var(--color-primary-rgb), 0.5))` }}>
+                <div className="flex gap-3">
+                    <MenuButton text={isListening ? "Stop (Space)" : "Start (Space)"} onClick={onToggleListen} icon={isListening ? 'fa-stop' : 'fa-microphone'} isSpecial={isListening ? 'red' : 'green'} />
+                    <MenuButton text="Visuals" onClick={() => setIsVisualsPanelOpen(p => !p)} icon="fa-paint-brush" isActive={isVisualsPanelOpen} />
+                    <MenuButton text={isFullscreen ? "Exit Fullscreen (F)" : "Enter Fullscreen (F)"} onClick={toggleFullScreen} icon={isFullscreen ? 'fa-compress' : 'fa-expand'} />
+                </div>
+                <div className="flex gap-3">
+                    <MenuButton text="Clear (C)" onClick={onClear} icon="fa-trash" />
+                    <MenuButton text="Exit (Esc)" onClick={onExit} icon="fa-times-circle" />
+                    <MenuButton text="Hide Menu (M)" onClick={() => setIsMenuOpen(false)} icon="fa-chevron-up" />
+                </div>
             </div>
             {isVisualsPanelOpen && (
-                <div className="mt-2 bg-black/30 backdrop-blur-md rounded-xl p-3 space-y-3 border border-slate-700/50 shadow-lg animate-[fadeIn_0.3s_ease-out]">
+                <div className="mt-4 bg-black/30 backdrop-blur-md rounded-xl p-3 space-y-3 border border-slate-700/50 shadow-lg animate-[fadeIn_0.3s_ease-out]">
                     <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm w-20 text-slate-300">Avatar:</span>
                         <input type="range" min="0.5" max="2.5" step="0.1" value={avatarSize} onChange={(e) => setAvatarSize(parseFloat(e.target.value))} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-[var(--color-primary)]"/>
@@ -599,7 +632,7 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
       ) : (
           <div className="fixed top-4 left-4 z-[100]">
             <Tooltip text="Show Menu (M)" position="right">
-                <button onClick={() => setIsMenuOpen(true)} className="w-14 h-14 text-2xl rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-slate-700/50 shadow-lg hover:bg-slate-700/80 transition-colors animate-[glow-button_3s_infinite] glow-button">
+                <button onClick={() => setIsMenuOpen(true)} className="w-14 h-14 text-2xl rounded-full bg-black/30 backdrop-blur-md flex items-center justify-center border border-slate-700/50 shadow-lg hover:bg-slate-700/80 transition-colors animate-cosmic-glow">
                     <i className="fas fa-bars"></i>
                 </button>
             </Tooltip>
@@ -612,8 +645,13 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
             ref={avatarRef}
             src={avatarMap[avatarEmotion]}
             alt="Vircy Avatar"
-            className="absolute top-8 left-1/2 -translate-x-1/2 z-40 rounded-full border-2 border-[var(--color-primary)] shadow-[0_0_25px_var(--color-primary)] transition-all duration-300 pointer-events-none"
-            style={{ width: `${8 * avatarSize}rem`, height: `${8 * avatarSize}rem` }}
+            className="absolute top-8 left-1/2 -translate-x-1/2 z-40 rounded-full border-2 transition-all duration-300 pointer-events-none"
+            style={{ 
+                width: `${8 * avatarSize}rem`, 
+                height: `${8 * avatarSize}rem`,
+                borderColor: `rgba(var(--color-primary-rgb), ${0.2 + avatarGlow * 0.8})`,
+                boxShadow: `0 0 ${5 + avatarGlow * 50}px rgba(var(--color-primary-rgb), ${0.2 + avatarGlow * 0.6})`
+            }}
         />
       )}
 
@@ -624,11 +662,11 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
             key={b.id}
             ref={el => { b.element = el; }}
             onClick={() => handleBubbleClick(b.id)}
-            className={`absolute rounded-xl flex items-center justify-center text-center p-2 transition-transform duration-200 hover:scale-110 cursor-pointer pointer-events-auto w-auto h-auto font-semibold
+            className={`absolute flex items-center justify-center text-center transition-transform duration-200 hover:scale-110 cursor-pointer pointer-events-auto w-auto h-auto font-semibold chevron-clip
                 ${b.isExiting ? 'animate-[bubble-pop-out_0.3s_ease-out_forwards]' : 'animate-[bubble-pop-in_0.3s_ease-out]'}`}
             style={{ 
               fontSize: '1rem', 
-              padding: '0.5rem 1rem',
+              padding: '0.5rem 1.8rem 0.5rem 1.2rem',
               background: wordTypeStyles[b.type].background,
               border: wordTypeStyles[b.type].border,
               boxShadow: wordTypeStyles[b.type].boxShadow,
@@ -642,7 +680,7 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
       {/* Transcript Area */}
       <div className="absolute inset-0 flex flex-col items-center justify-end pointer-events-none z-50 pb-48">
         <div className="w-full max-w-4xl text-center space-y-2 p-4">
-          <div className="h-48 text-2xl text-slate-500 space-y-2 overflow-hidden flex flex-col justify-end">
+          <div className="h-48 text-2xl text-slate-400 space-y-2 overflow-hidden flex flex-col justify-end">
             {liveEntries.slice(0, -1).map(entry => (
               <p key={entry.id} className="animate-[line-scroll-up_0.5s_ease-out_forwards]">{entry.text}</p>
             ))}

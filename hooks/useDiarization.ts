@@ -20,10 +20,10 @@ interface SpeakerModel {
 const useDiarization = (
   stream: MediaStream | null,
   settings: DiarizationSettings,
-  startTime: number | null,
-  onNewSegments: (segments: DiarizationSegment[]) => void
+  startTime: number | null
 ) => {
   const [activeSpeaker, setActiveSpeaker] = useState<SpeakerId | null>(null);
+  const [segments, setSegments] = useState<DiarizationSegment[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +36,6 @@ const useDiarization = (
   // Speaker detection state
   const speakerModelsRef = useRef<Map<SpeakerId, SpeakerModel>>(new Map());
   const currentSegmentRef = useRef<DiarizationSegment | null>(null);
-  const segmentsRef = useRef<DiarizationSegment[]>([]);
   const silenceCountRef = useRef(0);
   const featureBufferRef = useRef<AudioFeatures[]>([]);
   
@@ -193,14 +192,13 @@ const useDiarization = (
       
       // Only save segments that are long enough
       if (segment.endMs - segment.startMs >= MIN_SEGMENT_DURATION_MS) {
-        segmentsRef.current = [...segmentsRef.current, segment];
-        onNewSegments(segmentsRef.current);
+        setSegments(prev => [...prev, segment]);
       }
       
       currentSegmentRef.current = null;
       setActiveSpeaker(null);
     }
-  }, [onNewSegments]);
+  }, []);
 
   // Process audio data
   const processAudioData = useCallback((dataArray: Uint8Array, sampleRate: number) => {
@@ -290,10 +288,19 @@ const useDiarization = (
       const processor = context.createScriptProcessor(bufferSize, 1, 1);
       processorRef.current = processor;
 
-      // Connect nodes
+      // Create a GainNode to act as a sink and prevent audio feedback.
+      // The ScriptProcessorNode needs to be connected to an output for its
+      // `onaudioprocess` event to fire. By routing it through a muted GainNode,
+      // we get the processing events without outputting the microphone audio
+      // to the speakers, which would cause an echo/feedback loop.
+      const gainNode = context.createGain();
+      gainNode.gain.setValueAtTime(0, context.currentTime);
+
+      // Connect nodes: source -> analyser -> processor -> gain -> destination
       source.connect(analyser);
       analyser.connect(processor);
-      processor.connect(context.destination);
+      processor.connect(gainNode);
+      gainNode.connect(context.destination);
 
       // Process audio data
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -309,6 +316,15 @@ const useDiarization = (
       setIsProcessing(false);
     }
   }, [stream, settings.enabled, startTime, processAudioData]);
+
+  const resetDiarization = useCallback(() => {
+    setSegments([]);
+    speakerModelsRef.current.clear();
+    featureBufferRef.current = [];
+    silenceCountRef.current = 0;
+    currentSegmentRef.current = null;
+    setActiveSpeaker(null);
+  }, []);
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -339,41 +355,26 @@ const useDiarization = (
       audioContextRef.current = null;
     }
 
-    // Reset state
-    speakerModelsRef.current.clear();
-    segmentsRef.current = [];
-    featureBufferRef.current = [];
-    silenceCountRef.current = 0;
-    currentSegmentRef.current = null;
-    setActiveSpeaker(null);
     setIsProcessing(false);
   }, [startTime, endCurrentSegment]);
 
   // Main effect for managing audio processing lifecycle
   useEffect(() => {
     if (stream && settings.enabled && startTime) {
+      resetDiarization();
       initializeAudioProcessing();
     } else {
       cleanup();
     }
-
     return cleanup;
-  }, [stream, settings.enabled, startTime, initializeAudioProcessing, cleanup]);
-
-  // Reset segments when settings change significantly
-  useEffect(() => {
-    if (settings.enabled) {
-      segmentsRef.current = [];
-      speakerModelsRef.current.clear();
-      onNewSegments([]);
-    }
-  }, [settings.expectedSpeakers, settings.enabled, onNewSegments]);
+  }, [stream, settings.enabled, startTime, initializeAudioProcessing, cleanup, resetDiarization]);
 
   return { 
     activeSpeaker, 
     isProcessing, 
     error,
-    segments: segmentsRef.current 
+    segments,
+    resetDiarization
   };
 };
 

@@ -18,6 +18,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
   const animationFrameId = useRef<number | null>(null);
   const analyser = useRef<AnalyserNode | null>(null);
   const dataArray = useRef<Uint8Array | null>(null);
+  const frequencyArray = useRef<Uint8Array | null>(null);
   const audioContext = useRef<AudioContext | null>(null);
   const idleTime = useRef(0);
 
@@ -27,6 +28,10 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
     const ctx = canvas?.getContext('2d');
     if (!ctx || !canvas) return;
 
+    const rootStyle = getComputedStyle(document.documentElement);
+    const primaryRgb = rootStyle.getPropertyValue('--color-primary-rgb').trim();
+    const secondaryRgb = rootStyle.getPropertyValue('--color-secondary-rgb').trim();
+
     const width = canvas.width;
     const height = canvas.height;
     const centerY = height / 2;
@@ -34,18 +39,20 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
     ctx.clearRect(0, 0, width, height);
 
     const gradient = ctx.createLinearGradient(0, 0, width, 0);
-    gradient.addColorStop(0, "rgba(0, 217, 255, 0.1)");
-    gradient.addColorStop(0.5, "rgba(0, 217, 255, 0.7)");
-    gradient.addColorStop(1, "rgba(0, 217, 255, 0.1)");
+    if (primaryRgb && secondaryRgb) {
+        gradient.addColorStop(0, `rgba(${secondaryRgb}, 0.1)`);
+        gradient.addColorStop(0.5, `rgba(${primaryRgb}, 0.7)`);
+        gradient.addColorStop(1, `rgba(${secondaryRgb}, 0.1)`);
+        ctx.shadowColor = `rgba(${primaryRgb}, 0.5)`;
+    }
 
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = gradient;
-    ctx.shadowColor = 'rgba(0, 217, 255, 0.5)';
     ctx.shadowBlur = 10;
     
     ctx.beginPath();
     for (let x = 0; x < width; x++) {
-      const y = centerY + Math.sin(x * 0.03 + idleTime.current) * 10 * Math.sin(idleTime.current * 0.5);
+      const y = centerY + Math.sin(x * 0.02 + idleTime.current) * 15 * Math.cos(idleTime.current * 0.3);
       ctx.lineTo(x, y);
     }
     ctx.stroke();
@@ -54,9 +61,11 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
   }, []);
 
   const drawActive = useCallback(() => {
-    if (!analyser.current || !dataArray.current || !canvasRef.current) return;
+    if (!analyser.current || !dataArray.current || !frequencyArray.current || !canvasRef.current) return;
     
     analyser.current.getByteTimeDomainData(dataArray.current);
+    analyser.current.getByteFrequencyData(frequencyArray.current);
+
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -66,55 +75,70 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
     
     ctx.clearRect(0, 0, width, height);
     
-    const gradient = ctx.createLinearGradient(0, 0, width, 0);
-    gradient.addColorStop(0, themeColors.secondary);
-    gradient.addColorStop(0.5, themeColors.primary);
-    gradient.addColorStop(1, themeColors.accent);
+    const rootStyle = getComputedStyle(document.documentElement);
+    const primaryRgb = rootStyle.getPropertyValue('--color-primary-rgb').trim() || '77, 138, 255';
+    const secondaryRgb = rootStyle.getPropertyValue('--color-secondary-rgb').trim() || '167, 119, 255';
+    const accentRgb = rootStyle.getPropertyValue('--color-accent-rgb').trim() || '255, 201, 77';
 
     const bufferLength = analyser.current.frequencyBinCount;
+    const freqData = frequencyArray.current;
+    const timeData = dataArray.current;
+
+    // Layer 1: Low-frequency energy bars (background)
+    const barCount = 32;
+    const barWidth = width / barCount;
+    ctx.globalAlpha = 0.4;
+    for (let i = 0; i < barCount; i++) {
+        const freqIndex = Math.floor(i * (bufferLength / barCount) * 0.2); // Only use lower 20% of frequencies
+        const barHeight = (freqData[freqIndex] / 255) * height * 0.5;
+        const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
+        gradient.addColorStop(0, `rgba(${secondaryRgb}, 0.1)`);
+        gradient.addColorStop(1, `rgba(${primaryRgb}, 0.5)`);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(i * barWidth, height - barHeight, barWidth, barHeight);
+    }
+    ctx.globalAlpha = 1;
+
+    // Layer 2: Core waveform (mid-ground)
     const sliceWidth = width * 1.0 / bufferLength;
-    const data = dataArray.current;
-
-    // --- Draw Glow Path ---
-    ctx.lineWidth = 8;
-    ctx.strokeStyle = themeColors.primary + '33'; // Add alpha for transparency
-    ctx.shadowBlur = 0;
-
-    ctx.beginPath();
-    let x = 0;
-    for (let i = 0; i < bufferLength; i++) {
-        const v = data[i] / 128.0;
-        const y = v * height / 2;
-        if (i === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
+    const drawWave = (lineWidth: number, strokeStyle: string | CanvasGradient, shadowBlur: number, shadowColor: string) => {
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = strokeStyle;
+        ctx.shadowBlur = shadowBlur;
+        ctx.shadowColor = shadowColor;
+        ctx.beginPath();
+        let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            const v = timeData[i] / 128.0;
+            const y = v * height / 2;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+            x += sliceWidth;
         }
-        x += sliceWidth;
-    }
-    ctx.lineTo(width, height / 2);
-    ctx.stroke();
-
-    // --- Draw Main Path ---
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = gradient;
-    ctx.shadowColor = themeColors.primary;
-    ctx.shadowBlur = 15;
+        ctx.lineTo(width, height / 2);
+        ctx.stroke();
+    };
+    const mainGradient = ctx.createLinearGradient(0, 0, width, 0);
+    mainGradient.addColorStop(0, themeColors.secondary);
+    mainGradient.addColorStop(0.5, themeColors.primary);
+    mainGradient.addColorStop(1, themeColors.accent);
+    drawWave(2, mainGradient, 15, themeColors.primary);
     
-    ctx.beginPath();
-    x = 0;
-    for (let i = 0; i < bufferLength; i++) {
-        const v = data[i] / 128.0;
-        const y = v * height / 2;
-        if (i === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
+    // Layer 3: High-frequency particles (foreground)
+    ctx.shadowBlur = 0;
+    for (let i = Math.floor(bufferLength * 0.4); i < bufferLength; i += 5) { // Use upper 60% of frequencies
+        const freqValue = freqData[i];
+        if (freqValue > 190) { // Threshold
+            const x = (i / bufferLength) * width;
+            const y = (1 - (freqValue / 255)) * height * 0.8 + (height * 0.1); // Constrain particles to middle 80%
+            const radius = (freqValue / 255) * 1.5;
+            const alpha = (freqValue - 190) / 65;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${accentRgb}, ${alpha})`;
+            ctx.fill();
         }
-        x += sliceWidth;
     }
-    ctx.lineTo(width, height / 2);
-    ctx.stroke();
     
     animationFrameId.current = requestAnimationFrame(drawActive);
   }, [themeColors]);
@@ -135,6 +159,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
         analyser.current.fftSize = 2048;
         analyser.current.smoothingTimeConstant = 0.85;
         dataArray.current = new Uint8Array(analyser.current.frequencyBinCount);
+        frequencyArray.current = new Uint8Array(analyser.current.frequencyBinCount);
         
         drawActive();
     } else {
@@ -154,7 +179,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
   }, [isListening, stream, drawActive, drawIdle]);
 
   return (
-    <div className="relative w-full h-36 bg-slate-900/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl overflow-hidden shadow-lg">
+    <div className="relative w-full h-36 bg-slate-900/30 backdrop-blur-sm border border-slate-700/50 rounded-2xl overflow-hidden shadow-lg">
       <canvas ref={canvasRef} className="w-full h-full" />
     </div>
   );
