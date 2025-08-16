@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import useSpeechRecognition from './hooks/useSpeechRecognition';
 import useDiarization from './hooks/useDiarization';
@@ -193,15 +194,23 @@ const DiarizationPanel: React.FC<{
   onUpdateProfile: (id: SpeakerId, newLabel: string) => void;
   onMergeSpeakers: (s1: SpeakerId, s2: SpeakerId) => void;
   addToast: (title: string, message: string, type: ToastType) => void;
-}> = ({ settings, setSettings, profiles, onUpdateProfile, onMergeSpeakers, addToast }) => {
+  isProcessing?: boolean;
+  error?: string | null;
+}> = ({ settings, setSettings, profiles, onUpdateProfile, onMergeSpeakers, addToast, isProcessing, error }) => {
     const [isMergeMode, setIsMergeMode] = useState(false);
     const [speakersToMerge, setSpeakersToMerge] = useState<SpeakerId[]>([]);
     
-    const handleToggle = () => setSettings(s => ({ ...s, enabled: !s.enabled }));
+    const handleToggle = () => {
+        const newEnabled = !settings.enabled;
+        setSettings(s => ({ ...s, enabled: newEnabled }));
+        if (newEnabled) {
+            addToast('Diarization Enabled', 'Speaker detection is now active.', 'info');
+        }
+    };
+    
     const handleSpeakersChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value;
-        const numSpeakers = value === 'auto' ? 25 : Number(value); 
-        setSettings(s => ({ ...s, expectedSpeakers: numSpeakers }));
+        const value = Number(e.target.value);
+        setSettings(s => ({ ...s, expectedSpeakers: value }));
     };
     
     const handleSpeakerChipClick = (id: SpeakerId) => {
@@ -229,58 +238,129 @@ const DiarizationPanel: React.FC<{
         setSpeakersToMerge([]);
     };
 
-    const displayValue = settings.expectedSpeakers === 25 ? 'auto' : settings.expectedSpeakers;
-
     return (
         <div className="space-y-3">
             <div className="flex items-center justify-between">
                 <SectionHeader icon="fa-users" title="Diarization" />
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked={settings.enabled} onChange={handleToggle} className="sr-only peer" aria-label="Toggle Diarization"/>
-                  <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-primary)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
-                </label>
+                <div className="flex items-center gap-2">
+                    {isProcessing && (
+                        <Tooltip text="Processing audio...">
+                            <i className="fas fa-circle-notch fa-spin text-[var(--color-primary)]"></i>
+                        </Tooltip>
+                    )}
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            checked={settings.enabled} 
+                            onChange={handleToggle} 
+                            className="sr-only peer" 
+                            aria-label="Toggle Diarization"
+                        />
+                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[var(--color-primary)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
+                    </label>
+                </div>
             </div>
+            
+            {error && (
+                <div className="p-2 bg-red-900/20 border border-red-500/50 rounded-lg text-xs text-red-400">
+                    <i className="fas fa-exclamation-triangle mr-2"></i>
+                    {error}
+                </div>
+            )}
+            
             <div className={`space-y-3 transition-opacity duration-300 ${settings.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                 <div className="relative">
-                    <label htmlFor="speakers" className="block text-sm font-medium text-slate-300 mb-1">Speaker Count</label>
-                     <Tooltip text="Auto-detects speakers. Experimental for many speakers.">
-                        <select id="speakers" value={displayValue} onChange={handleSpeakersChange} className="bg-slate-700/70 border border-slate-600 text-white text-sm rounded-lg focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] block w-full p-2">
-                            <option value="auto">Auto (Max 25)</option>
-                            {[...Array(7).keys()].map(i => <option key={i+2} value={i + 2}>{i + 2}</option>)}
+                <div className="relative">
+                    <label htmlFor="speakers" className="block text-sm font-medium text-slate-300 mb-1">
+                        Expected Speakers
+                    </label>
+                    <Tooltip text="Set the maximum number of unique speakers to detect">
+                        <select 
+                            id="speakers" 
+                            value={settings.expectedSpeakers} 
+                            onChange={handleSpeakersChange} 
+                            className="bg-slate-700/70 border border-slate-600 text-white text-sm rounded-lg focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] block w-full p-2"
+                        >
+                            <option value="2">2 Speakers</option>
+                            <option value="3">3 Speakers</option>
+                            <option value="4">4 Speakers</option>
+                            <option value="5">5 Speakers</option>
+                            <option value="6">6 Speakers</option>
+                            <option value="8">8 Speakers</option>
+                            <option value="10">10 Speakers</option>
                         </select>
                     </Tooltip>
                 </div>
-                 <div className="space-y-2 pt-2 border-t border-slate-700/50">
+                
+                <div className="space-y-2 pt-2 border-t border-slate-700/50">
                     <div className="flex justify-between items-center">
-                        <h4 className="font-semibold text-sm text-slate-300">Detected Speakers:</h4>
+                        <h4 className="font-semibold text-sm text-slate-300">
+                            Detected Speakers: 
+                            <span className="ml-1 text-[var(--color-primary)]">
+                                {Object.keys(profiles).length}
+                            </span>
+                        </h4>
                         {Object.keys(profiles).length > 1 && (
-                            <Tooltip text="Merge two speakers"><button onClick={toggleMergeMode} className={`px-2 py-0.5 text-xs rounded-full transition-colors ${isMergeMode ? 'bg-[var(--color-accent)] text-black' : 'bg-slate-700/70 hover:bg-slate-600'}`}>Merge</button></Tooltip>
+                            <Tooltip text="Merge two speakers">
+                                <button 
+                                    onClick={toggleMergeMode} 
+                                    className={`px-2 py-0.5 text-xs rounded-full transition-colors flex items-center gap-1 ${
+                                        isMergeMode 
+                                            ? 'bg-[var(--color-accent)] text-black' 
+                                            : 'bg-slate-700/70 hover:bg-slate-600'
+                                    }`}
+                                >
+                                    <i className="fas fa-code-merge"></i>
+                                    Merge
+                                </button>
+                            </Tooltip>
                         )}
                     </div>
+                    
                     {isMergeMode && (
                         <div className="p-2 bg-slate-900/50 rounded-lg text-center">
-                            <p className="text-xs text-slate-300 mb-2">Select two speakers below to merge them.</p>
-                            <button onClick={handleExecuteMerge} disabled={speakersToMerge.length !== 2} className="w-full py-1 text-sm bg-green-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-500">
-                                Merge {speakersToMerge.length}/2
+                            <p className="text-xs text-slate-300 mb-2">
+                                Select two speakers below to merge them.
+                            </p>
+                            <button 
+                                onClick={handleExecuteMerge} 
+                                disabled={speakersToMerge.length !== 2} 
+                                className="w-full py-1 text-sm bg-green-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-500 transition-colors"
+                            >
+                                <i className="fas fa-check mr-1"></i>
+                                Merge Selected ({speakersToMerge.length}/2)
                             </button>
                         </div>
                     )}
+                    
                     {Object.values(profiles).length > 0 ? (
                         <div className="space-y-1 max-h-32 overflow-y-auto pr-2">
-                            {Object.values(profiles).sort((a,b) => a.id.localeCompare(b.id)).map(profile => (
-                                <SpeakerChip 
-                                    key={profile.id} 
-                                    profile={profile} 
-                                    onUpdate={onUpdateProfile} 
-                                    isMergeMode={isMergeMode}
-                                    isSelected={speakersToMerge.includes(profile.id)}
-                                    onClick={handleSpeakerChipClick}
-                                />
-                            ))}
+                            {Object.values(profiles)
+                                .sort((a, b) => a.id.localeCompare(b.id))
+                                .map(profile => (
+                                    <SpeakerChip 
+                                        key={profile.id} 
+                                        profile={profile} 
+                                        onUpdate={onUpdateProfile} 
+                                        isMergeMode={isMergeMode}
+                                        isSelected={speakersToMerge.includes(profile.id)}
+                                        onClick={handleSpeakerChipClick}
+                                    />
+                                ))
+                            }
                         </div>
                     ) : (
-                        <p className="text-xs text-slate-400 italic px-1">Start listening to detect speakers.</p>
+                        <p className="text-xs text-slate-400 italic px-1">
+                            {settings.enabled 
+                                ? "Start listening to detect speakers." 
+                                : "Enable diarization to detect speakers."}
+                        </p>
                     )}
+                </div>
+                
+                <div className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded-lg">
+                    <i className="fas fa-info-circle mr-1"></i>
+                    <strong>Tip:</strong> For best results, ensure speakers have distinct voices 
+                    and speak clearly. The system works best with 2-4 speakers.
                 </div>
             </div>
         </div>
@@ -288,52 +368,81 @@ const DiarizationPanel: React.FC<{
 };
 
 
-const DiarizationTimeline: React.FC<{ segments: DiarizationSegment[], profiles: Record<SpeakerId, SpeakerProfile>, duration: number, timelineEvents: TimelineEvent[] }> = ({ segments, profiles, duration, timelineEvents }) => {
-    if (duration === 0) return null;
+const DiarizationTimeline: React.FC<{ 
+  segments: DiarizationSegment[], 
+  profiles: Record<SpeakerId, SpeakerProfile>, 
+  duration: number, 
+  timelineEvents: TimelineEvent[],
+  activeSpeaker?: SpeakerId | null 
+}> = ({ segments, profiles, duration, timelineEvents, activeSpeaker }) => {
+  if (duration === 0) return null;
 
-    const sentimentGradient = useMemo(() => {
-        if (timelineEvents.length === 0) return 'transparent';
-        const sentimentEvents = timelineEvents.filter(e => e.type === 'sentiment');
-        if (sentimentEvents.length === 0) return 'transparent';
+  const sentimentGradient = useMemo(() => {
+    if (timelineEvents.length === 0) return 'transparent';
+    const sentimentEvents = timelineEvents.filter(e => e.type === 'sentiment');
+    if (sentimentEvents.length === 0) return 'transparent';
 
-        const colorStops = sentimentEvents.map(event => {
-            const color = event.value === 'positive' ? 'rgba(74, 222, 128, 0.3)' : event.value === 'negative' ? 'rgba(248, 113, 113, 0.3)' : 'rgba(107, 114, 128, 0.2)';
-            const position = (event.startMs / duration) * 100;
-            return `${color} ${position}%`;
-        });
+    const colorStops = sentimentEvents.map(event => {
+      const color = event.value === 'positive' ? 'rgba(74, 222, 128, 0.3)' : 
+                    event.value === 'negative' ? 'rgba(248, 113, 113, 0.3)' : 
+                    'rgba(107, 114, 128, 0.2)';
+      const position = (event.startMs / duration) * 100;
+      return `${color} ${position}%`;
+    });
 
-        return `linear-gradient(to right, ${colorStops.join(', ')})`;
-    }, [timelineEvents, duration]);
+    return `linear-gradient(to right, ${colorStops.join(', ')})`;
+  }, [timelineEvents, duration]);
 
-    return (
-        <div className="w-full h-8 bg-slate-900/50 rounded-lg relative overflow-hidden border border-slate-700/50" style={{ background: sentimentGradient }}>
-            {segments.map((seg, i) => {
-                const profile = profiles[seg.speakerId];
-                if (!profile) return null;
-                const left = (seg.startMs / duration) * 100;
-                const width = ((seg.endMs - seg.startMs) / duration) * 100;
-                return (
-                    <Tooltip key={`seg-${i}`} text={`${profile.label}: ${formatDuration(seg.startMs/1000)} - ${formatDuration(seg.endMs/1000)}`}>
-                        <div 
-                            className="absolute h-full"
-                            style={{
-                                left: `${left}%`,
-                                width: `${width}%`,
-                                backgroundColor: profile.color,
-                                opacity: 0.7
-                            }}
-                        />
-                    </Tooltip>
-                );
-            })}
-            {timelineEvents.filter(e => e.type === 'topic').map((event, i) => (
-                 <Tooltip key={`topic-${i}`} text={`Topic: ${event.value}`}>
-                    <div className="absolute top-1/2 -translate-y-1/2 w-1 h-full bg-[var(--color-accent)]" style={{ left: `${(event.startMs / duration) * 100}%` }}></div>
-                 </Tooltip>
-            ))}
-        </div>
-    );
+  return (
+    <div className="w-full h-8 bg-slate-900/50 rounded-lg relative overflow-hidden border border-slate-700/50" 
+         style={{ background: sentimentGradient }}>
+      {segments.map((seg, i) => {
+        const profile = profiles[seg.speakerId];
+        if (!profile) return null;
+        const left = (seg.startMs / duration) * 100;
+        const width = ((seg.endMs - seg.startMs) / duration) * 100;
+        const isActive = activeSpeaker === seg.speakerId && i === segments.length - 1;
+        
+        return (
+          <Tooltip key={`seg-${i}`} text={`${profile.label}: ${formatDuration(seg.startMs/1000)} - ${formatDuration(seg.endMs/1000)}`}>
+            <div 
+              className={`absolute h-full transition-opacity duration-300 ${isActive ? 'animate-pulse' : ''}`}
+              style={{
+                left: `${left}%`,
+                width: `${width}%`,
+                backgroundColor: profile.color,
+                opacity: isActive ? 0.9 : 0.7
+              }}
+            />
+          </Tooltip>
+        );
+      })}
+      
+      {/* Speaker transition markers */}
+      {segments.slice(1).map((seg, i) => {
+        const prevSeg = segments[i];
+        if (prevSeg.speakerId === seg.speakerId) return null;
+        const position = (seg.startMs / duration) * 100;
+        
+        return (
+          <div 
+            key={`transition-${i}`}
+            className="absolute top-0 w-px h-full bg-white/50"
+            style={{ left: `${position}%` }}
+          />
+        );
+      })}
+      
+      {timelineEvents.filter(e => e.type === 'topic').map((event, i) => (
+        <Tooltip key={`topic-${i}`} text={`Topic: ${event.value}`}>
+          <div className="absolute top-1/2 -translate-y-1/2 w-1 h-full bg-[var(--color-accent)]" 
+               style={{ left: `${(event.startMs / duration) * 100}%` }} />
+        </Tooltip>
+      ))}
+    </div>
+  );
 };
+
 
 const SpeakerTag: React.FC<{ profile: SpeakerProfile; onClick: (event: React.MouseEvent<HTMLButtonElement>) => void }> = ({ profile, onClick }) => {
   const speakerNum = profile.id.replace('S', '');
@@ -435,7 +544,7 @@ const App: React.FC = () => {
   const [translationLanguage, setTranslationLanguage] = useState<string>('');
   
   // --- Diarization State ---
-  const [diarizationSettings, setDiarizationSettings] = useState<DiarizationSettings>({ enabled: true, mode: 'local', expectedSpeakers: 25 });
+  const [diarizationSettings, setDiarizationSettings] = useState<DiarizationSettings>({ enabled: true, mode: 'local', expectedSpeakers: 2 });
   const [speakerProfiles, setSpeakerProfiles] = useState<Record<SpeakerId, SpeakerProfile>>(() => {
     try {
       const saved = localStorage.getItem('defscribe-speakerProfiles');
@@ -446,11 +555,24 @@ const App: React.FC = () => {
     }
   });
   const [diarizationSegments, setDiarizationSegments] = useState<DiarizationSegment[]>([]);
+  const [diarizationError, setDiarizationError] = useState<string | null>(null);
   
   const startTimeRef = useRef<number | null>(null);
   const translationQueueRef = useRef<{ id: string, text: string }[]>([]);
+  const lastActiveSpeakerRef = useRef<SpeakerId | null>(null);
+  const pendingSpeakerAssignments = useRef<Map<string, SpeakerId>>(new Map());
+  const processedTranscriptRef = useRef('');
 
-  const { activeSpeaker } = useDiarization(stream, diarizationSettings, startTimeRef.current, setDiarizationSegments);
+  const { 
+    activeSpeaker, 
+    isProcessing: isDiarizationProcessing, 
+    error: diarizationErrorFromHook 
+  } = useDiarization(
+    stream, 
+    diarizationSettings, 
+    startTimeRef.current, 
+    setDiarizationSegments
+  );
   
   const [editingEntry, setEditingEntry] = useState<{ entryId: string; anchorEl: HTMLElement | null } | null>(null);
   
@@ -460,48 +582,50 @@ const App: React.FC = () => {
   const [liveTextState, setLiveTextState] = useState<'visible' | 'fading-out' | 'hidden'>('hidden');
   const fadeOutTimerRef = useRef<number | null>(null);
 
-  // --- Virtual Scrolling State ---
+  // --- Scrolling Refs ---
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
-  const VIRTUAL_ROW_HEIGHT = 72; // Estimated height for one entry (includes padding)
-  const OVERSCAN = 5;
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
 
-  const handleScroll = useCallback(() => {
-    if (!transcriptContainerRef.current) return;
-    const { scrollTop, clientHeight } = transcriptContainerRef.current;
-    const start = Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT);
-    const end = Math.ceil((scrollTop + clientHeight) / VIRTUAL_ROW_HEIGHT);
-    if (start !== visibleRange.start || end !== visibleRange.end) {
-        setVisibleRange({
-            start: Math.max(0, start - OVERSCAN),
-            end: Math.min(transcriptEntries.length, end + OVERSCAN),
-        });
-    }
-  }, [transcriptEntries.length, visibleRange.start, visibleRange.end]);
+  const addToast = useCallback((title: string, message: string, type: ToastType) => {
+    setToasts((prevToasts) => [...prevToasts, { id: Date.now(), title, message, type }]);
+  }, []);
 
   useEffect(() => {
-    const container = transcriptContainerRef.current;
-    container?.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+    if (diarizationErrorFromHook) {
+      setDiarizationError(diarizationErrorFromHook);
+      addToast('Diarization Error', diarizationErrorFromHook, 'error');
+    } else {
+      setDiarizationError(null);
+    }
+  }, [diarizationErrorFromHook, addToast]);
 
   useEffect(() => {
-    handleScroll();
-  }, [transcriptEntries.length, handleScroll]);
-
-  const transcriptEndRef = useCallback((node: HTMLDivElement | null) => {
-    if (node && autoScroll) {
-        node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    if (activeSpeaker !== lastActiveSpeakerRef.current) {
+      lastActiveSpeakerRef.current = activeSpeaker;
+      
+      if (activeSpeaker && pendingSpeakerAssignments.current.size > 0) {
+        const updates = new Map(pendingSpeakerAssignments.current);
+        pendingSpeakerAssignments.current.clear();
+        
+        setTranscriptEntries(prev => 
+          prev.map(entry => {
+            if (updates.has(entry.id)) {
+              return { ...entry, speakerIds: [activeSpeaker] };
+            }
+            return entry;
+          })
+        );
+      }
     }
-  }, [autoScroll]);
+  }, [activeSpeaker]);
 
+
+  // Auto-scroll logic
   useEffect(() => {
-    if (autoScroll && transcriptContainerRef.current) {
-        const container = transcriptContainerRef.current;
-        container.scrollTop = container.scrollHeight;
-        handleScroll();
+    if (autoScroll && transcriptEndRef.current) {
+      transcriptEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [transcript, transcriptEntries.length, autoScroll, handleScroll]);
+  }, [autoScroll, transcriptEntries, liveText]);
 
 
   useEffect(() => {
@@ -544,10 +668,6 @@ const App: React.FC = () => {
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'speech' | 'conversation' | 'actions' | 'snippets' | 'summary'>('speech');
 
   const { leftPanelWidth, rightPanelWidth, handleMouseDown, resetLayout } = useResizablePanels(300, 384, 280, 500);
-
-  const addToast = useCallback((title: string, message: string, type: ToastType) => {
-    setToasts((prevToasts) => [...prevToasts, { id: Date.now(), title, message, type }]);
-  }, []);
 
   useEffect(() => { localStorage.setItem('defscribe-showTimestamps', String(showTimestamps)); }, [showTimestamps]);
   useEffect(() => { localStorage.setItem('defscribe-autoScroll', String(autoScroll)); }, [autoScroll]);
@@ -646,67 +766,65 @@ const App: React.FC = () => {
 
 
     useEffect(() => {
-        if (finalTranscript) {
-            const existingText = transcriptEntries.map(e => e.text).join(' ');
-            const newText = finalTranscript.slice(existingText.length).trim();
-
-            if (newText) {
-                const now = Date.now();
-                const newEntryId = `entry-${now}`;
-                
-                if(translationLanguage) {
-                    translationQueueRef.current.push({ id: newEntryId, text: newText });
-                }
-
-                setTranscriptEntries(prev => {
-                    if (prev.length > 0 && prev[prev.length-1].endTimestamp === undefined) {
-                        prev[prev.length - 1].endTimestamp = now;
-                    }
-                    const newEntry: TranscriptEntry = {
-                        id: newEntryId,
-                        timestamp: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        rawTimestamp: now,
-                        text: newText,
-                        isFinal: true,
-                        speakerIds: [], // Assign speaker via the correlation useEffect
-                    };
-                    return [...prev, newEntry];
-                });
-            }
+        if (finalTranscript.length <= processedTranscriptRef.current.length) {
+            return;
         }
-    }, [finalTranscript, translationLanguage, transcriptEntries]);
-
-  // Correlate transcript entries with diarization segments as they become available.
-  // This is more robust than assigning speakers at the moment of transcript creation.
-  useEffect(() => {
-    if (diarizationSegments.length === 0 || !startTimeRef.current) return;
-
-    const hasUnassignedEntries = transcriptEntries.some(e => !e.speakerIds || e.speakerIds.length === 0);
-
-    if (hasUnassignedEntries) {
-      setTranscriptEntries(currentEntries => {
-        let hasChanges = false;
-        const updatedEntries = currentEntries.map(entry => {
-          if (!entry.speakerIds || entry.speakerIds.length === 0) {
-            const entryStartMs = entry.rawTimestamp - startTimeRef.current!;
-            const matchingSegment = diarizationSegments.find(
-              seg => entryStartMs >= seg.startMs && entryStartMs < seg.endMs
-            );
-            if (matchingSegment) {
-              hasChanges = true;
-              return { ...entry, speakerIds: [matchingSegment.speakerId] };
+    
+        const newText = finalTranscript.slice(processedTranscriptRef.current.length).trim();
+        processedTranscriptRef.current = finalTranscript;
+    
+        if (newText) {
+            const now = Date.now();
+            const newEntryId = `entry-${now}`;
+            
+            let assignedSpeaker: SpeakerId | undefined;
+            if (diarizationSettings.enabled && startTimeRef.current) {
+                if (activeSpeaker) {
+                    assignedSpeaker = activeSpeaker;
+                } else {
+                    const currentTimeMs = now - startTimeRef.current;
+                    const recentSegment = diarizationSegments
+                        .filter(seg => seg.startMs <= currentTimeMs && seg.endMs >= currentTimeMs - 1000)
+                        .sort((a, b) => b.endMs - a.endMs)[0];
+                    
+                    if (recentSegment) {
+                        assignedSpeaker = recentSegment.speakerId;
+                    } else if (diarizationSegments.length === 0) {
+                        pendingSpeakerAssignments.current.set(newEntryId, 'S1' as SpeakerId);
+                    }
+                }
             }
-          }
-          return entry;
-        });
-        return hasChanges ? updatedEntries : currentEntries;
-      });
-    }
-  }, [diarizationSegments, transcriptEntries]);
+    
+            if (translationLanguage) {
+                translationQueueRef.current.push({ id: newEntryId, text: newText });
+            }
+    
+            const newEntry: TranscriptEntry = {
+                id: newEntryId,
+                timestamp: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                rawTimestamp: now,
+                text: newText,
+                isFinal: true,
+                speakerIds: assignedSpeaker ? [assignedSpeaker] : [],
+            };
+    
+            setTranscriptEntries(prev => {
+                const updatedPrev = [...prev];
+                if (updatedPrev.length > 0) {
+                    const lastEntry = updatedPrev[updatedPrev.length - 1];
+                    if (lastEntry.endTimestamp === undefined) {
+                       updatedPrev[updatedPrev.length - 1] = { ...lastEntry, endTimestamp: now };
+                    }
+                }
+                return [...updatedPrev, newEntry];
+            });
+        }
+    }, [finalTranscript, translationLanguage, diarizationSettings.enabled, activeSpeaker, diarizationSegments]);
 
   
   useEffect(() => {
     const allSpeakers = new Set<SpeakerId>();
+    
     transcriptEntries.forEach(e => e.speakerIds?.forEach(id => allSpeakers.add(id)));
     diarizationSegments.forEach(s => allSpeakers.add(s.speakerId));
     if (activeSpeaker) allSpeakers.add(activeSpeaker);
@@ -745,6 +863,7 @@ const App: React.FC = () => {
       
       clearTranscript();
       setTranscriptEntries([]);
+      processedTranscriptRef.current = '';
       setSummary('Your transcript summary will appear here.');
       setSummaryStyle(null);
       setAnalytics(initialAnalytics);
@@ -752,14 +871,23 @@ const App: React.FC = () => {
       setActionItems([]);
       setSnippets([]);
       setDiarizationSegments([]);
-      if (!localStorage.getItem('defscribe-speakerProfiles')) {
-          setSpeakerProfiles({});
+      setDiarizationError(null);
+      pendingSpeakerAssignments.current.clear();
+      lastActiveSpeakerRef.current = null;
+      
+      if (localStorage.getItem('defscribe-keepSpeakerProfiles') !== 'true') {
+        setSpeakerProfiles({});
       }
+      
       startTimeRef.current = Date.now();
 
       startListening();
       setAvatarEmotion('listening');
       addToast('Listening Started', 'DefScribe is now recording your speech.', 'info');
+
+      if (diarizationSettings.enabled) {
+        addToast('Diarization Active', `Detecting up to ${diarizationSettings.expectedSpeakers} speakers.`, 'info');
+      }
     } catch (err) {
       addToast('Microphone Error', 'Could not access the microphone. Please check permissions.', 'error');
     }
@@ -911,15 +1039,23 @@ const App: React.FC = () => {
     if (window.confirm("Are you sure you want to clear the entire transcript? This action cannot be undone.")) {
       clearTranscript();
       setTranscriptEntries([]);
+      processedTranscriptRef.current = '';
       setSummary('Your transcript summary will appear here.');
       setSummaryStyle(null);
       setAnalytics(initialAnalytics);
       setSearchQuery('');
-      setSpeakerProfiles({});
-      localStorage.removeItem('defscribe-speakerProfiles');
       setActionItems([]);
       setSnippets([]);
       setDiarizationSegments([]);
+      setDiarizationError(null);
+      pendingSpeakerAssignments.current.clear();
+      lastActiveSpeakerRef.current = null;
+      
+      if (localStorage.getItem('defscribe-keepSpeakerProfiles') !== 'true') {
+        setSpeakerProfiles({});
+        localStorage.removeItem('defscribe-speakerProfiles');
+      }
+      
       startTimeRef.current = null;
       addToast('Cleared', 'Transcript has been cleared.', 'info');
     }
@@ -1126,6 +1262,33 @@ const App: React.FC = () => {
     addToast('Speakers Merged', `Merged ${speakerProfiles[removeSpeaker].label} into ${speakerProfiles[keepSpeaker].label}.`, 'success');
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        isListening ? handleStop() : handleStart();
+      }
+      
+      if (e.key.toLowerCase() === 'd') {
+        if (!isListening) {
+          const newEnabled = !diarizationSettings.enabled;
+          setDiarizationSettings(prev => ({ ...prev, enabled: newEnabled }));
+          addToast(
+            'Diarization Toggled', 
+            `Speaker detection is now ${newEnabled ? 'enabled' : 'disabled'}.`, 
+            'info'
+          );
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isListening, diarizationSettings.enabled, addToast]);
+
+
   const snippetIconMap: Record<Snippet['type'], string> = {
     quote: 'fas fa-quote-left',
     question: 'fas fa-question-circle',
@@ -1229,7 +1392,26 @@ const App: React.FC = () => {
                     {Object.entries(THEME_PRESETS).map(([key, theme]) => (<Tooltip text={`Theme ${key}`} key={key}><button onClick={() => setActiveThemeKey(Number(key))} className={`h-8 w-full rounded-lg transition-all border-2 ${activeThemeKey === Number(key) ? 'border-white' : 'border-transparent'}`} style={{background: `linear-gradient(45deg, ${theme.primary}, ${theme.secondary})`}}/></Tooltip>))}
                 </div>
               </div>
-              <DiarizationPanel settings={diarizationSettings} setSettings={setDiarizationSettings} profiles={speakerProfiles} onUpdateProfile={updateSpeakerLabel} onMergeSpeakers={handleMergeSpeakers} addToast={addToast}/>
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm text-slate-300">Speaker Memory</h4>
+                <label className="flex items-center gap-2 cursor-pointer p-1 rounded-md hover:bg-slate-700/50">
+                  <input 
+                    type="checkbox" 
+                    checked={localStorage.getItem('defscribe-keepSpeakerProfiles') === 'true'}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      localStorage.setItem('defscribe-keepSpeakerProfiles', isChecked ? 'true' : 'false');
+                      if (!isChecked) {
+                        localStorage.removeItem('defscribe-speakerProfiles');
+                      }
+                      addToast('Setting Updated', `Speaker profiles will ${isChecked ? 'be kept' : 'reset'} on new recordings.`, 'info');
+                    }}
+                    className="w-4 h-4 text-[var(--color-primary)] bg-slate-700 border-slate-600 rounded focus:ring-[var(--color-primary)] accent-[var(--color-primary)]"
+                  />
+                  <span className="text-sm text-slate-300">Keep speaker profiles between recordings</span>
+                </label>
+              </div>
+              <DiarizationPanel settings={diarizationSettings} setSettings={setDiarizationSettings} profiles={speakerProfiles} onUpdateProfile={updateSpeakerLabel} onMergeSpeakers={handleMergeSpeakers} addToast={addToast} isProcessing={isDiarizationProcessing} error={diarizationError}/>
            </div>
 
           <div className="mt-auto pt-4">
@@ -1251,9 +1433,44 @@ const App: React.FC = () => {
         {/* Main Content Area */}
         <main className="w-full flex flex-col overflow-hidden h-full">
           <Visualizer isListening={isListening} stream={stream} themeColors={themeColors} />
-          {diarizationSettings.enabled && <div className="mt-4"><DiarizationTimeline segments={diarizationSegments} profiles={speakerProfiles} duration={analytics.duration * 1000} timelineEvents={analytics.timelineEvents} /></div>}
+          {diarizationSettings.enabled && (
+            <div className="mt-2 flex items-center justify-between px-2 text-xs">
+              <div className="flex items-center gap-2 min-h-[16px]">
+                {activeSpeaker && speakerProfiles[activeSpeaker] ? (
+                  <>
+                    <div 
+                      className="w-3 h-3 rounded-full animate-pulse" 
+                      style={{ backgroundColor: speakerProfiles[activeSpeaker].color }}
+                    />
+                    <span className="font-semibold" style={{ color: speakerProfiles[activeSpeaker].color }}>
+                      {speakerProfiles[activeSpeaker].label} is speaking
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-slate-500">
+                    {isListening ? 'Detecting speaker...' : 'Diarization ready'}
+                  </span>
+                )}
+              </div>
+              {isDiarizationProcessing && (
+                <span className="text-slate-400">
+                  <i className="fas fa-circle-notch fa-spin mr-1"></i>
+                  Processing audio...
+                </span>
+              )}
+            </div>
+          )}
+          <div className="mt-2">
+            <DiarizationTimeline 
+                segments={diarizationSegments} 
+                profiles={speakerProfiles} 
+                duration={analytics.duration * 1000} 
+                timelineEvents={analytics.timelineEvents}
+                activeSpeaker={activeSpeaker}
+              />
+          </div>
 
-          <div className="relative p-4 flex-1 backdrop-blur-lg border border-slate-700/50 rounded-2xl shadow-lg flex flex-col min-h-0" style={{ backgroundColor: 'var(--panel-bg-color)' }}>
+          <div className="relative p-4 flex-1 backdrop-blur-lg border border-slate-700/50 rounded-2xl shadow-lg flex flex-col min-h-0 mt-2" style={{ backgroundColor: 'var(--panel-bg-color)' }}>
             <div className="absolute top-2 right-2 z-10 flex gap-2">
                 <Tooltip text="Chat with Transcript"><button onClick={() => setIsChatOpen(true)} className="px-3 py-1 text-xs rounded-full transition-colors bg-slate-700/70 text-slate-400 hover:bg-[var(--color-primary)]/30 hover:text-[var(--color-primary)]"><i className="fas fa-comments mr-1"></i></button></Tooltip>
                 <Tooltip text={showTimestamps ? "Hide Timestamps" : "Show Timestamps"}><button onClick={() => setShowTimestamps(!showTimestamps)} className={`px-3 py-1 text-xs rounded-full transition-colors ${showTimestamps ? 'bg-[var(--color-primary)]/30 text-[var(--color-primary)]' : 'bg-slate-700/70 text-slate-400'}`}><i className="fas fa-clock mr-1"></i></button></Tooltip>
@@ -1270,38 +1487,43 @@ const App: React.FC = () => {
                     className="w-full bg-slate-900/70 border border-slate-700 rounded-lg py-2 pl-9 pr-3 text-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none transition-shadow"
                 />
             </div>
-            <div ref={transcriptContainerRef} className="overflow-y-auto flex-1 pr-2">
-              <div style={{ height: transcriptEntries.length * VIRTUAL_ROW_HEIGHT, position: 'relative' }}>
-                {transcriptEntries.slice(visibleRange.start, visibleRange.end).map((entry, index) => (
-                    <div key={entry.id} className="group absolute w-full" style={{ top: (visibleRange.start + index) * VIRTUAL_ROW_HEIGHT }}>
-                      <div className="relative flex items-start gap-3 p-2 rounded-lg hover:bg-slate-800/50 transition-colors fade-in-entry pb-4">
-                          {showTimestamps && (
-                              <div className="w-24 flex-shrink-0 pt-1">
-                                  <span className="font-roboto-mono text-xs text-[var(--color-secondary)] bg-[var(--color-secondary)]/10 px-2 py-1 rounded-md">{entry.timestamp}</span>
-                              </div>
-                          )}
-                          <div className={`flex-1 pt-1 ${!showTimestamps ? 'pl-2' : ''}`}>
-                              <div className="flex items-start gap-2">
-                                  {diarizationSettings.enabled && entry.speakerIds && entry.speakerIds.length > 0 && (
-                                      <div className="flex items-center justify-center gap-1 pt-1">
-                                          {entry.speakerIds.map(id => speakerProfiles[id] ? <SpeakerTag key={id} profile={speakerProfiles[id]} onClick={(e) => setEditingEntry({ entryId: entry.id, anchorEl: e.currentTarget })} /> : null)}
-                                      </div>
-                                  )}
-                                  <div className="flex-1">
-                                      <p className="text-slate-300 leading-relaxed">{highlightText(entry.text, searchQuery)}</p>
-                                      {entry.translatedText && <p className="text-sm text-slate-400 italic mt-1 pl-2 border-l-2 border-slate-600">{entry.translatedText}</p>}
-                                  </div>
-                              </div>
-                          </div>
-                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary)]/50 to-transparent transition-all duration-500 group-hover:w-[95%]"></div>
-                      </div>
+            <div ref={transcriptContainerRef} className="overflow-y-auto flex-1 pr-2 min-h-0">
+              {transcriptEntries.map((entry) => (
+                <div key={entry.id} className="relative flex items-start gap-3 p-2 rounded-lg hover:bg-slate-800/50 transition-colors fade-in-entry pb-4 group">
+                    {showTimestamps && (
+                        <div className="w-24 flex-shrink-0 pt-1">
+                            <span className="font-roboto-mono text-xs text-[var(--color-secondary)] bg-[var(--color-secondary)]/10 px-2 py-1 rounded-md">{entry.timestamp}</span>
+                        </div>
+                    )}
+                    <div className={`flex-1 pt-1 ${!showTimestamps ? 'pl-2' : ''}`}>
+                        <div className="flex items-start gap-2">
+                            {diarizationSettings.enabled && entry.speakerIds && entry.speakerIds.length > 0 && (
+                                <div className="flex items-center justify-center gap-1 pt-1">
+                                    {entry.speakerIds.map(id => speakerProfiles[id] ? <SpeakerTag key={id} profile={speakerProfiles[id]} onClick={(e) => setEditingEntry({ entryId: entry.id, anchorEl: e.currentTarget })} /> : null)}
+                                </div>
+                            )}
+                            <div className="flex-1">
+                                <p className="text-slate-300 leading-relaxed">{highlightText(entry.text, searchQuery)}</p>
+                                {entry.translatedText && <p className="text-sm text-slate-400 italic mt-1 pl-2 border-l-2 border-slate-600">{entry.translatedText}</p>}
+                            </div>
+                        </div>
                     </div>
-                ))}
-              </div>
-              {transcriptEntries.length === 0 && <div className="flex items-start gap-3 p-2"><p className="flex-1 text-slate-400 italic">Welcome to DefScribe. Press Start Listening to begin.</p></div>}
+                    <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary)]/50 to-transparent transition-all duration-500 group-hover:w-[95%]"></div>
+                </div>
+              ))}
+              
+              {transcriptEntries.length === 0 && !isListening && (
+                <div className="flex items-start gap-3 p-2">
+                  <p className="flex-1 text-slate-400 italic">Welcome to DefScribe. Press Start Listening to begin.</p>
+                </div>
+              )}
               
               {isListening && liveTextState !== 'hidden' && (
-                  <div className={`group relative flex items-start gap-3 p-2 rounded-lg text-slate-400 transition-opacity duration-500 ease-out ${liveTextState === 'fading-out' ? 'opacity-0' : 'opacity-100'}`}>
+                  <div className={`group relative flex items-start gap-3 p-2 rounded-lg text-slate-400 transition-all duration-500 ease-out 
+                    ${liveTextState === 'fading-out' ? 'opacity-0' : 'opacity-100'}
+                    ${activeSpeaker ? 'border-l-4' : ''}`}
+                    style={{ borderLeftColor: activeSpeaker && speakerProfiles[activeSpeaker] ? speakerProfiles[activeSpeaker].color : 'transparent' }}
+                  >
                       {showTimestamps && (
                           <div className="w-24 flex-shrink-0 pt-1">
                               <span className="font-roboto-mono text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-md">Now...</span>
@@ -1311,7 +1533,9 @@ const App: React.FC = () => {
                           <div className="flex items-start gap-2">
                               {diarizationSettings.enabled && activeSpeaker && speakerProfiles[activeSpeaker] && (
                                   <div className="flex items-center justify-center gap-1 pt-1">
-                                      <div className="w-6 h-6 rounded-full" style={{ backgroundColor: speakerProfiles[activeSpeaker].color, opacity: 0.7 }}></div>
+                                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: speakerProfiles[activeSpeaker].color, opacity: 0.9 }}>
+                                        {activeSpeaker.replace('S','')}
+                                      </div>
                                   </div>
                               )}
                               <div className="flex-1">
