@@ -144,7 +144,7 @@ const AccuracyCircle: React.FC<{ percentage: number }> = ({ percentage }) => {
     );
 };
 
-const SpeakerChip: React.FC<{ profile: SpeakerProfile; onUpdate: (id: SpeakerId, newLabel: string) => void; }> = ({ profile, onUpdate }) => {
+const SpeakerChip: React.FC<{ profile: SpeakerProfile; onUpdate: (id: SpeakerId, newLabel: string) => void; isMergeMode: boolean; isSelected: boolean; onClick: (id: SpeakerId) => void; }> = ({ profile, onUpdate, isMergeMode, isSelected, onClick }) => {
     const [text, setText] = useState(profile.label);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -165,7 +165,10 @@ const SpeakerChip: React.FC<{ profile: SpeakerProfile; onUpdate: (id: SpeakerId,
     useEffect(() => { setText(profile.label) }, [profile.label]);
 
     return (
-        <div className="flex items-center gap-2 flex-shrink-0 group w-full p-1 rounded-md hover:bg-slate-700/50">
+        <div 
+            className={`flex items-center gap-2 flex-shrink-0 group w-full p-1 rounded-md transition-all ${isMergeMode ? 'cursor-pointer hover:bg-slate-700' : 'hover:bg-slate-700/50'} ${isSelected ? 'ring-2 ring-[var(--color-accent)] bg-slate-700' : ''}`}
+            onClick={() => isMergeMode && onClick(profile.id)}
+        >
             <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: profile.color }}></span>
             <input
                 ref={inputRef}
@@ -174,7 +177,8 @@ const SpeakerChip: React.FC<{ profile: SpeakerProfile; onUpdate: (id: SpeakerId,
                 onChange={(e) => setText(e.target.value)}
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
-                className="bg-transparent text-sm font-semibold w-full p-0 focus:outline-none focus:ring-0 focus:bg-slate-700 rounded px-1"
+                disabled={isMergeMode}
+                className="bg-transparent text-sm font-semibold w-full p-0 focus:outline-none focus:ring-0 focus:bg-slate-700 rounded px-1 disabled:cursor-pointer"
                 style={{ color: profile.color }}
                 aria-label={`Edit label for ${profile.label}`}
             />
@@ -187,12 +191,42 @@ const DiarizationPanel: React.FC<{
   setSettings: React.Dispatch<React.SetStateAction<DiarizationSettings>>;
   profiles: Record<SpeakerId, SpeakerProfile>;
   onUpdateProfile: (id: SpeakerId, newLabel: string) => void;
-}> = ({ settings, setSettings, profiles, onUpdateProfile }) => {
+  onMergeSpeakers: (s1: SpeakerId, s2: SpeakerId) => void;
+  addToast: (title: string, message: string, type: ToastType) => void;
+}> = ({ settings, setSettings, profiles, onUpdateProfile, onMergeSpeakers, addToast }) => {
+    const [isMergeMode, setIsMergeMode] = useState(false);
+    const [speakersToMerge, setSpeakersToMerge] = useState<SpeakerId[]>([]);
+    
     const handleToggle = () => setSettings(s => ({ ...s, enabled: !s.enabled }));
     const handleSpeakersChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const value = e.target.value;
         const numSpeakers = value === 'auto' ? 25 : Number(value); 
         setSettings(s => ({ ...s, expectedSpeakers: numSpeakers }));
+    };
+    
+    const handleSpeakerChipClick = (id: SpeakerId) => {
+        if (!isMergeMode) return;
+        setSpeakersToMerge(prev => {
+            if (prev.includes(id)) return prev.filter(s => s !== id);
+            if (prev.length < 2) return [...prev, id];
+            addToast('Merge Limit', 'You can only select two speakers to merge.', 'warning');
+            return prev;
+        });
+    };
+
+    const handleExecuteMerge = () => {
+        if (speakersToMerge.length !== 2) {
+            addToast('Merge Error', 'Please select exactly two speakers to merge.', 'error');
+            return;
+        }
+        onMergeSpeakers(speakersToMerge[0], speakersToMerge[1]);
+        setSpeakersToMerge([]);
+        setIsMergeMode(false);
+    };
+
+    const toggleMergeMode = () => {
+        setIsMergeMode(prev => !prev);
+        setSpeakersToMerge([]);
     };
 
     const displayValue = settings.expectedSpeakers === 25 ? 'auto' : settings.expectedSpeakers;
@@ -217,11 +251,31 @@ const DiarizationPanel: React.FC<{
                     </Tooltip>
                 </div>
                  <div className="space-y-2 pt-2 border-t border-slate-700/50">
-                    <h4 className="font-semibold text-sm text-slate-300">Detected Speakers:</h4>
+                    <div className="flex justify-between items-center">
+                        <h4 className="font-semibold text-sm text-slate-300">Detected Speakers:</h4>
+                        {Object.keys(profiles).length > 1 && (
+                            <Tooltip text="Merge two speakers"><button onClick={toggleMergeMode} className={`px-2 py-0.5 text-xs rounded-full transition-colors ${isMergeMode ? 'bg-[var(--color-accent)] text-black' : 'bg-slate-700/70 hover:bg-slate-600'}`}>Merge</button></Tooltip>
+                        )}
+                    </div>
+                    {isMergeMode && (
+                        <div className="p-2 bg-slate-900/50 rounded-lg text-center">
+                            <p className="text-xs text-slate-300 mb-2">Select two speakers below to merge them.</p>
+                            <button onClick={handleExecuteMerge} disabled={speakersToMerge.length !== 2} className="w-full py-1 text-sm bg-green-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-500">
+                                Merge {speakersToMerge.length}/2
+                            </button>
+                        </div>
+                    )}
                     {Object.values(profiles).length > 0 ? (
                         <div className="space-y-1 max-h-32 overflow-y-auto pr-2">
                             {Object.values(profiles).sort((a,b) => a.id.localeCompare(b.id)).map(profile => (
-                                <SpeakerChip key={profile.id} profile={profile} onUpdate={onUpdateProfile} />
+                                <SpeakerChip 
+                                    key={profile.id} 
+                                    profile={profile} 
+                                    onUpdate={onUpdateProfile} 
+                                    isMergeMode={isMergeMode}
+                                    isSelected={speakersToMerge.includes(profile.id)}
+                                    onClick={handleSpeakerChipClick}
+                                />
                             ))}
                         </div>
                     ) : (
@@ -281,16 +335,18 @@ const DiarizationTimeline: React.FC<{ segments: DiarizationSegment[], profiles: 
     );
 };
 
-const SpeakerTag: React.FC<{ profile: SpeakerProfile }> = ({ profile }) => {
+const SpeakerTag: React.FC<{ profile: SpeakerProfile; onClick: (event: React.MouseEvent<HTMLButtonElement>) => void }> = ({ profile, onClick }) => {
   const speakerNum = profile.id.replace('S', '');
   return (
-    <Tooltip text={profile.label} position="right">
-      <div 
-        className="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 text-white shadow-md border-2 border-slate-900/50"
+    <Tooltip text={`Reassign ${profile.label}`} position="right">
+      <button 
+        onClick={onClick}
+        className="w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 text-white shadow-md border-2 border-slate-900/50 transition-transform hover:scale-110"
         style={{ backgroundColor: profile.color }}
+        aria-label={`Speaker ${speakerNum}, ${profile.label}. Click to reassign.`}
       >
         {speakerNum}
-      </div>
+      </button>
     </Tooltip>
   );
 };
@@ -304,6 +360,51 @@ const formatDuration = (totalSeconds: number) => {
 const hexToRgb = (hex: string): [number, number, number] | null => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? [ parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16) ] : null;
+};
+
+const SpeakerSelectorPopup: React.FC<{
+  anchorEl: HTMLElement | null;
+  profiles: Record<SpeakerId, SpeakerProfile>;
+  onSelect: (speakerId: SpeakerId) => void;
+  onClose: () => void;
+}> = ({ anchorEl, profiles, onSelect, onClose }) => {
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (popupRef.current && !popupRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [onClose]);
+
+  if (!anchorEl) return null;
+
+  const rect = anchorEl.getBoundingClientRect();
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    top: rect.bottom + 4,
+    left: rect.left,
+    zIndex: 110,
+  };
+
+  return (
+    <div ref={popupRef} style={style} className="bg-slate-900 border border-slate-600 rounded-lg shadow-2xl p-2 space-y-1 w-48 animate-[fadeIn_0.2s_ease-out]">
+      <h4 className="text-xs font-bold text-slate-400 px-2 pb-1 border-b border-slate-700">Reassign Speaker</h4>
+      <div className="max-h-48 overflow-y-auto">
+        {Object.values(profiles).sort((a,b) => a.id.localeCompare(b.id)).map(profile => (
+            <button key={profile.id} onClick={() => onSelect(profile.id)} className="w-full text-left flex items-center gap-2 p-2 rounded-md hover:bg-slate-700/50 transition-colors">
+            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: profile.color }}></span>
+            <span className="text-sm font-semibold" style={{ color: profile.color }}>{profile.label}</span>
+            </button>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 
@@ -335,21 +436,73 @@ const App: React.FC = () => {
   
   // --- Diarization State ---
   const [diarizationSettings, setDiarizationSettings] = useState<DiarizationSettings>({ enabled: true, mode: 'local', expectedSpeakers: 25 });
-  const [speakerProfiles, setSpeakerProfiles] = useState<Record<SpeakerId, SpeakerProfile>>({});
+  const [speakerProfiles, setSpeakerProfiles] = useState<Record<SpeakerId, SpeakerProfile>>(() => {
+    try {
+      const saved = localStorage.getItem('defscribe-speakerProfiles');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      console.error('Failed to load speaker profiles from storage', e);
+      return {};
+    }
+  });
   const [diarizationSegments, setDiarizationSegments] = useState<DiarizationSegment[]>([]);
   
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
   const startTimeRef = useRef<number | null>(null);
   const translationQueueRef = useRef<{ id: string, text: string }[]>([]);
-  const firstSpeakerIdentified = useRef(false);
 
   const { activeSpeaker } = useDiarization(stream, diarizationSettings, startTimeRef.current, setDiarizationSegments);
+  
+  const [editingEntry, setEditingEntry] = useState<{ entryId: string; anchorEl: HTMLElement | null } | null>(null);
   
   // --- Live Transcript Animation State ---
   const prevTranscript = usePrevious(transcript);
   const [liveText, setLiveText] = useState('');
   const [liveTextState, setLiveTextState] = useState<'visible' | 'fading-out' | 'hidden'>('hidden');
   const fadeOutTimerRef = useRef<number | null>(null);
+
+  // --- Virtual Scrolling State ---
+  const transcriptContainerRef = useRef<HTMLDivElement>(null);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
+  const VIRTUAL_ROW_HEIGHT = 72; // Estimated height for one entry (includes padding)
+  const OVERSCAN = 5;
+
+  const handleScroll = useCallback(() => {
+    if (!transcriptContainerRef.current) return;
+    const { scrollTop, clientHeight } = transcriptContainerRef.current;
+    const start = Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT);
+    const end = Math.ceil((scrollTop + clientHeight) / VIRTUAL_ROW_HEIGHT);
+    if (start !== visibleRange.start || end !== visibleRange.end) {
+        setVisibleRange({
+            start: Math.max(0, start - OVERSCAN),
+            end: Math.min(transcriptEntries.length, end + OVERSCAN),
+        });
+    }
+  }, [transcriptEntries.length, visibleRange.start, visibleRange.end]);
+
+  useEffect(() => {
+    const container = transcriptContainerRef.current;
+    container?.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container?.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
+
+  useEffect(() => {
+    handleScroll();
+  }, [transcriptEntries.length, handleScroll]);
+
+  const transcriptEndRef = useCallback((node: HTMLDivElement | null) => {
+    if (node && autoScroll) {
+        node.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [autoScroll]);
+
+  useEffect(() => {
+    if (autoScroll && transcriptContainerRef.current) {
+        const container = transcriptContainerRef.current;
+        container.scrollTop = container.scrollHeight;
+        handleScroll();
+    }
+  }, [transcript, transcriptEntries.length, autoScroll, handleScroll]);
+
 
   useEffect(() => {
     if (fadeOutTimerRef.current) {
@@ -399,6 +552,14 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('defscribe-showTimestamps', String(showTimestamps)); }, [showTimestamps]);
   useEffect(() => { localStorage.setItem('defscribe-autoScroll', String(autoScroll)); }, [autoScroll]);
   useEffect(() => { localStorage.setItem('defscribe-theme', String(activeThemeKey)); }, [activeThemeKey]);
+  
+  useEffect(() => {
+    try {
+      localStorage.setItem('defscribe-speakerProfiles', JSON.stringify(speakerProfiles));
+    } catch (e) {
+      console.error('Failed to save speaker profiles to storage', e);
+    }
+  }, [speakerProfiles]);
 
   useEffect(() => {
     const theme = THEME_PRESETS[activeThemeKey];
@@ -492,14 +653,6 @@ const App: React.FC = () => {
             if (newText) {
                 const now = Date.now();
                 const newEntryId = `entry-${now}`;
-                const entryStartMs = now - (startTimeRef.current || now);
-                
-                const matchingSegment = [...diarizationSegments].reverse().find(
-                    seg => entryStartMs >= seg.startMs && entryStartMs <= seg.endMs
-                );
-                // Use activeSpeaker if available. If the back-fill logic hasn't run yet,
-                // this might be null, which is fine. The back-fill will fix it.
-                const speakerIdArray = matchingSegment ? [matchingSegment.speakerId] : (activeSpeaker ? [activeSpeaker] : []);
                 
                 if(translationLanguage) {
                     translationQueueRef.current.push({ id: newEntryId, text: newText });
@@ -515,34 +668,47 @@ const App: React.FC = () => {
                         rawTimestamp: now,
                         text: newText,
                         isFinal: true,
-                        speakerIds: speakerIdArray,
+                        speakerIds: [], // Assign speaker via the correlation useEffect
                     };
                     return [...prev, newEntry];
                 });
             }
         }
-    }, [finalTranscript, translationLanguage, activeSpeaker, diarizationSegments, transcriptEntries]);
+    }, [finalTranscript, translationLanguage, transcriptEntries]);
 
-  // FIX: Back-fill speaker IDs for initial entries that were created before the first speaker was identified.
+  // Correlate transcript entries with diarization segments as they become available.
+  // This is more robust than assigning speakers at the moment of transcript creation.
   useEffect(() => {
-    if (activeSpeaker && !firstSpeakerIdentified.current && transcriptEntries.length > 0) {
-        firstSpeakerIdentified.current = true; // Set flag to ensure this only runs once per session.
-        setTranscriptEntries(prev => {
-            let changed = false;
-            const updatedEntries = prev.map(entry => {
-                if (!entry.speakerIds || entry.speakerIds.length === 0) {
-                    changed = true;
-                    return { ...entry, speakerIds: [activeSpeaker] };
-                }
-                return entry;
-            });
-            return changed ? updatedEntries : prev;
+    if (diarizationSegments.length === 0 || !startTimeRef.current) return;
+
+    const hasUnassignedEntries = transcriptEntries.some(e => !e.speakerIds || e.speakerIds.length === 0);
+
+    if (hasUnassignedEntries) {
+      setTranscriptEntries(currentEntries => {
+        let hasChanges = false;
+        const updatedEntries = currentEntries.map(entry => {
+          if (!entry.speakerIds || entry.speakerIds.length === 0) {
+            const entryStartMs = entry.rawTimestamp - startTimeRef.current!;
+            const matchingSegment = diarizationSegments.find(
+              seg => entryStartMs >= seg.startMs && entryStartMs < seg.endMs
+            );
+            if (matchingSegment) {
+              hasChanges = true;
+              return { ...entry, speakerIds: [matchingSegment.speakerId] };
+            }
+          }
+          return entry;
         });
+        return hasChanges ? updatedEntries : currentEntries;
+      });
     }
-  }, [activeSpeaker, transcriptEntries]);
+  }, [diarizationSegments, transcriptEntries]);
+
   
   useEffect(() => {
-    const allSpeakers = new Set(transcriptEntries.flatMap(e => e.speakerIds || []).filter(Boolean) as SpeakerId[]);
+    const allSpeakers = new Set<SpeakerId>();
+    transcriptEntries.forEach(e => e.speakerIds?.forEach(id => allSpeakers.add(id)));
+    diarizationSegments.forEach(s => allSpeakers.add(s.speakerId));
     if (activeSpeaker) allSpeakers.add(activeSpeaker);
     
     let needsUpdate = false;
@@ -563,14 +729,8 @@ const App: React.FC = () => {
     if (needsUpdate) {
         setSpeakerProfiles(newProfiles);
     }
-  }, [transcriptEntries, activeSpeaker, speakerProfiles]);
+  }, [transcriptEntries, diarizationSegments, activeSpeaker, speakerProfiles]);
 
-
-  useEffect(() => {
-    if (autoScroll) {
-      transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [transcriptEntries, transcript, autoScroll]);
   
   useEffect(() => {
     if (isListening) {
@@ -589,12 +749,12 @@ const App: React.FC = () => {
       setSummaryStyle(null);
       setAnalytics(initialAnalytics);
       setSearchQuery('');
-      setSpeakerProfiles({});
       setActionItems([]);
       setSnippets([]);
       setDiarizationSegments([]);
-      firstSpeakerIdentified.current = false;
-
+      if (!localStorage.getItem('defscribe-speakerProfiles')) {
+          setSpeakerProfiles({});
+      }
       startTimeRef.current = Date.now();
 
       startListening();
@@ -756,11 +916,11 @@ const App: React.FC = () => {
       setAnalytics(initialAnalytics);
       setSearchQuery('');
       setSpeakerProfiles({});
+      localStorage.removeItem('defscribe-speakerProfiles');
       setActionItems([]);
       setSnippets([]);
       setDiarizationSegments([]);
       startTimeRef.current = null;
-      firstSpeakerIdentified.current = false;
       addToast('Cleared', 'Transcript has been cleared.', 'info');
     }
   }
@@ -929,6 +1089,43 @@ const App: React.FC = () => {
     setSpeakerProfiles(prev => ({ ...prev, [id]: { ...prev[id], label: newLabel } }));
   };
 
+  const handleSpeakerReassignment = (entryId: string, newSpeakerId: SpeakerId) => {
+      setTranscriptEntries(prev =>
+          prev.map(entry =>
+              entry.id === entryId ? { ...entry, speakerIds: [newSpeakerId] } : entry
+          )
+      );
+      setEditingEntry(null); // Close popup after selection
+  };
+  
+  const handleMergeSpeakers = (s1: SpeakerId, s2: SpeakerId) => {
+    // Keep the speaker with the lower number ID, e.g., merge S2 into S1
+    const keepSpeaker = s1 < s2 ? s1 : s2;
+    const removeSpeaker = s1 < s2 ? s2 : s1;
+
+    // Update transcript entries
+    setTranscriptEntries(prev => prev.map(entry => {
+        if (!entry.speakerIds) return entry;
+        const newSpeakerIds = entry.speakerIds.map(id => id === removeSpeaker ? keepSpeaker : id);
+        return { ...entry, speakerIds: [...new Set(newSpeakerIds)] };
+    }));
+    
+    // Update diarization segments
+    setDiarizationSegments(prev => prev.map(seg => {
+        if (seg.speakerId === removeSpeaker) return { ...seg, speakerId: keepSpeaker };
+        return seg;
+    }));
+    
+    // Update profiles
+    setSpeakerProfiles(prev => {
+        const newProfiles = { ...prev };
+        delete newProfiles[removeSpeaker];
+        return newProfiles;
+    });
+
+    addToast('Speakers Merged', `Merged ${speakerProfiles[removeSpeaker].label} into ${speakerProfiles[keepSpeaker].label}.`, 'success');
+  };
+
   const snippetIconMap: Record<Snippet['type'], string> = {
     quote: 'fas fa-quote-left',
     question: 'fas fa-question-circle',
@@ -981,6 +1178,15 @@ const App: React.FC = () => {
           onClose={() => setIsChatOpen(false)}
         />
       )}
+      
+      {editingEntry && (
+          <SpeakerSelectorPopup
+              anchorEl={editingEntry.anchorEl}
+              profiles={speakerProfiles}
+              onSelect={(speakerId) => handleSpeakerReassignment(editingEntry.entryId, speakerId)}
+              onClose={() => setEditingEntry(null)}
+          />
+      )}
     
       <div 
         className="h-screen text-slate-200 grid p-4 gap-0 relative z-20"
@@ -1023,7 +1229,7 @@ const App: React.FC = () => {
                     {Object.entries(THEME_PRESETS).map(([key, theme]) => (<Tooltip text={`Theme ${key}`} key={key}><button onClick={() => setActiveThemeKey(Number(key))} className={`h-8 w-full rounded-lg transition-all border-2 ${activeThemeKey === Number(key) ? 'border-white' : 'border-transparent'}`} style={{background: `linear-gradient(45deg, ${theme.primary}, ${theme.secondary})`}}/></Tooltip>))}
                 </div>
               </div>
-              <DiarizationPanel settings={diarizationSettings} setSettings={setDiarizationSettings} profiles={speakerProfiles} onUpdateProfile={updateSpeakerLabel} />
+              <DiarizationPanel settings={diarizationSettings} setSettings={setDiarizationSettings} profiles={speakerProfiles} onUpdateProfile={updateSpeakerLabel} onMergeSpeakers={handleMergeSpeakers} addToast={addToast}/>
            </div>
 
           <div className="mt-auto pt-4">
@@ -1064,59 +1270,61 @@ const App: React.FC = () => {
                     className="w-full bg-slate-900/70 border border-slate-700 rounded-lg py-2 pl-9 pr-3 text-sm focus:ring-2 focus:ring-[var(--color-primary)] focus:outline-none transition-shadow"
                 />
             </div>
-            <div className="overflow-y-auto flex-1 space-y-1 pr-2">
-                {transcriptEntries.length > 0 ? (
-                    transcriptEntries.map((entry) => (
-                        <div key={entry.id} className="group relative flex items-start gap-3 p-2 rounded-lg hover:bg-slate-800/50 transition-colors fade-in-entry pb-4">
-                            {showTimestamps && (
-                                <div className="w-24 flex-shrink-0 pt-1">
-                                    <span className="font-roboto-mono text-xs text-[var(--color-secondary)] bg-[var(--color-secondary)]/10 px-2 py-1 rounded-md">{entry.timestamp}</span>
-                                </div>
-                            )}
-                            <div className={`flex-1 pt-1 ${!showTimestamps ? 'pl-2' : ''}`}>
-                                <div className="flex items-start gap-2">
-                                    {diarizationSettings.enabled && entry.speakerIds && entry.speakerIds.length > 0 && (
-                                        <div className="flex items-center justify-center gap-1 pt-1">
-                                            {entry.speakerIds.map(id => speakerProfiles[id] ? <SpeakerTag key={id} profile={speakerProfiles[id]} /> : null)}
-                                        </div>
-                                    )}
-                                    <div className="flex-1">
-                                        <p className="text-slate-300 leading-relaxed">{highlightText(entry.text, searchQuery)}</p>
-                                        {entry.translatedText && <p className="text-sm text-slate-400 italic mt-1 pl-2 border-l-2 border-slate-600">{entry.translatedText}</p>}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary)]/50 to-transparent transition-all duration-500 group-hover:w-[95%]"></div>
-                        </div>
-                    ))
-                ) : ( <div className="flex items-start gap-3 p-2"><p className="flex-1 text-slate-400 italic">Welcome to DefScribe. Press Start Listening to begin.</p></div>)}
-                
-                {isListening && liveTextState !== 'hidden' && (
-                    <div className={`group relative flex items-start gap-3 p-2 rounded-lg text-slate-400 transition-opacity duration-500 ease-out ${liveTextState === 'fading-out' ? 'opacity-0' : 'opacity-100'}`}>
-                        {showTimestamps && (
-                            <div className="w-24 flex-shrink-0 pt-1">
-                                <span className="font-roboto-mono text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-md">Now...</span>
-                            </div>
-                        )}
-                        <div className={`flex-1 pt-1 ${!showTimestamps ? 'pl-2' : ''}`}>
-                            <div className="flex items-start gap-2">
-                                {diarizationSettings.enabled && activeSpeaker && speakerProfiles[activeSpeaker] && (
-                                    <div className="flex items-center justify-center gap-1 pt-1">
-                                        <SpeakerTag profile={speakerProfiles[activeSpeaker]} />
-                                    </div>
-                                )}
-                                <div className="flex-1">
-                                    <p className="italic leading-relaxed text-slate-300">
-                                        {highlightText(liveText, searchQuery)}
-                                        {liveTextState === 'visible' && <span className="inline-block w-0.5 h-4 bg-white/70 ml-1 animate-[cursor-blink_1s_step-end_infinite]"></span>}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+            <div ref={transcriptContainerRef} className="overflow-y-auto flex-1 pr-2">
+              <div style={{ height: transcriptEntries.length * VIRTUAL_ROW_HEIGHT, position: 'relative' }}>
+                {transcriptEntries.slice(visibleRange.start, visibleRange.end).map((entry, index) => (
+                    <div key={entry.id} className="group absolute w-full" style={{ top: (visibleRange.start + index) * VIRTUAL_ROW_HEIGHT }}>
+                      <div className="relative flex items-start gap-3 p-2 rounded-lg hover:bg-slate-800/50 transition-colors fade-in-entry pb-4">
+                          {showTimestamps && (
+                              <div className="w-24 flex-shrink-0 pt-1">
+                                  <span className="font-roboto-mono text-xs text-[var(--color-secondary)] bg-[var(--color-secondary)]/10 px-2 py-1 rounded-md">{entry.timestamp}</span>
+                              </div>
+                          )}
+                          <div className={`flex-1 pt-1 ${!showTimestamps ? 'pl-2' : ''}`}>
+                              <div className="flex items-start gap-2">
+                                  {diarizationSettings.enabled && entry.speakerIds && entry.speakerIds.length > 0 && (
+                                      <div className="flex items-center justify-center gap-1 pt-1">
+                                          {entry.speakerIds.map(id => speakerProfiles[id] ? <SpeakerTag key={id} profile={speakerProfiles[id]} onClick={(e) => setEditingEntry({ entryId: entry.id, anchorEl: e.currentTarget })} /> : null)}
+                                      </div>
+                                  )}
+                                  <div className="flex-1">
+                                      <p className="text-slate-300 leading-relaxed">{highlightText(entry.text, searchQuery)}</p>
+                                      {entry.translatedText && <p className="text-sm text-slate-400 italic mt-1 pl-2 border-l-2 border-slate-600">{entry.translatedText}</p>}
+                                  </div>
+                              </div>
+                          </div>
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary)]/50 to-transparent transition-all duration-500 group-hover:w-[95%]"></div>
+                      </div>
                     </div>
-                )}
-
-                <div ref={transcriptEndRef} />
+                ))}
+              </div>
+              {transcriptEntries.length === 0 && <div className="flex items-start gap-3 p-2"><p className="flex-1 text-slate-400 italic">Welcome to DefScribe. Press Start Listening to begin.</p></div>}
+              
+              {isListening && liveTextState !== 'hidden' && (
+                  <div className={`group relative flex items-start gap-3 p-2 rounded-lg text-slate-400 transition-opacity duration-500 ease-out ${liveTextState === 'fading-out' ? 'opacity-0' : 'opacity-100'}`}>
+                      {showTimestamps && (
+                          <div className="w-24 flex-shrink-0 pt-1">
+                              <span className="font-roboto-mono text-xs text-slate-500 bg-slate-800/50 px-2 py-1 rounded-md">Now...</span>
+                          </div>
+                      )}
+                      <div className={`flex-1 pt-1 ${!showTimestamps ? 'pl-2' : ''}`}>
+                          <div className="flex items-start gap-2">
+                              {diarizationSettings.enabled && activeSpeaker && speakerProfiles[activeSpeaker] && (
+                                  <div className="flex items-center justify-center gap-1 pt-1">
+                                      <div className="w-6 h-6 rounded-full" style={{ backgroundColor: speakerProfiles[activeSpeaker].color, opacity: 0.7 }}></div>
+                                  </div>
+                              )}
+                              <div className="flex-1">
+                                  <p className="italic leading-relaxed text-slate-300">
+                                      {highlightText(liveText, searchQuery)}
+                                      {liveTextState === 'visible' && <span className="inline-block w-0.5 h-4 bg-white/70 ml-1 animate-[cursor-blink_1s_step-end_infinite]"></span>}
+                                  </p>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              )}
+              <div ref={transcriptEndRef} />
             </div>
           </div>
         </main>
@@ -1165,7 +1373,8 @@ const App: React.FC = () => {
                                 <div key={item.id} className="p-2 bg-slate-900/50 rounded-lg border-l-4" style={{ borderColor: item.type === 'action' ? 'var(--color-accent)' : 'var(--color-secondary)'}}>
                                     <div className="flex items-center gap-2 mb-1">
                                         <i className={`fas ${item.type === 'action' ? 'fa-check-square' : 'fa-gavel'}`} style={{ color: item.type === 'action' ? 'var(--color-accent)' : 'var(--color-secondary)'}} />
-                                        {item.speakerId && speakerProfiles[item.speakerId] ? <SpeakerTag profile={speakerProfiles[item.speakerId]} /> : <span className="text-xs font-bold text-slate-400">{item.speakerLabel || 'Unknown'}</span>}
+                                        {item.speakerId && speakerProfiles[item.speakerId] ? <div className="w-5 h-5 rounded-full" style={{backgroundColor: speakerProfiles[item.speakerId].color}} /> : <span className="text-xs font-bold text-slate-400">{item.speakerLabel || 'Unknown'}</span>}
+                                        <span className="text-xs font-bold text-slate-400">{item.speakerLabel || 'Unknown'}</span>
                                     </div>
                                     <p className="text-sm text-slate-300">{item.content}</p>
                                 </div>
@@ -1185,7 +1394,8 @@ const App: React.FC = () => {
                                 <div key={item.id} className="p-2 bg-slate-900/50 rounded-lg border-l-4" style={{ borderColor: snippetColorMap[item.type] }}>
                                     <div className="flex items-center gap-2 mb-1">
                                         <i className={snippetIconMap[item.type]} style={{ color: snippetColorMap[item.type] }} />
-                                        {item.speakerId && speakerProfiles[item.speakerId] ? <SpeakerTag profile={speakerProfiles[item.speakerId]} /> : <span className="text-xs font-bold text-slate-400">{item.speakerLabel || 'Unknown'}</span>}
+                                        {item.speakerId && speakerProfiles[item.speakerId] ? <div className="w-5 h-5 rounded-full" style={{backgroundColor: speakerProfiles[item.speakerId].color}} /> : <span className="text-xs font-bold text-slate-400">{item.speakerLabel || 'Unknown'}</span>}
+                                        <span className="text-xs font-bold text-slate-400">{item.speakerLabel || 'Unknown'}</span>
                                     </div>
                                     <p className="text-sm text-slate-300">{item.content}</p>
                                 </div>
