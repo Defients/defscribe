@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import useSpeechRecognition from './hooks/useSpeechRecognition';
 import useAppSettings from './hooks/useAppSettings';
 import useTranscript from './hooks/useTranscript';
 import useAnalytics from './hooks/useAnalytics';
+import { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
 
 import ControlPanel from './components/panels/ControlPanel';
 import MainContentPanel from './components/panels/MainContentPanel';
@@ -11,13 +13,22 @@ import AnalyticsPanel from './components/panels/AnalyticsPanel';
 import Toast, { type ToastMessage, type ToastType } from './components/Toast';
 import ImmersiveMode from './components/ImmersiveMode';
 import TranscriptChat from './components/TranscriptChat';
+import ExportModal from './components/ExportModal';
 import { AVATAR_EMOTIONS } from './constants';
 import CosmicBackground from './components/CosmicBackground';
 
+const MAX_TOASTS = 5;
+
 const App: React.FC = () => {
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const addToast = useCallback((title: string, message: string, type: ToastType) => {
-    setToasts((prev) => [...prev, { id: Date.now(), title, message, type }]);
+    setToasts((prev) => {
+      const newToast = { id: Date.now(), title, message, type };
+      const updated = [...prev, newToast];
+      return updated.slice(-MAX_TOASTS);
+    });
   }, []);
   
   const dismissToast = (id: number) => {
@@ -74,10 +85,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const initialGlowTimeout = setTimeout(() => setIsImmersiveButtonGlowing(false), 6000);
-    // You can add logic for intermittent glows here if needed
     return () => clearTimeout(initialGlowTimeout);
   }, []);
-  
+
   const handleStart = async () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -108,28 +118,46 @@ const App: React.FC = () => {
     }
   };
 
+  // Keyboard shortcuts
+  useKeyboardNavigation([
+    { key: ' ', handler: () => isListening ? handleStop() : handleStart(), description: 'Toggle recording' },
+    { key: 'i', ctrl: true, handler: () => setIsImmersive(!isImmersive), description: 'Toggle immersive mode' },
+    { key: 'c', ctrl: true, shift: true, handler: handleClear, description: 'Clear session' },
+    { key: '/', ctrl: true, handler: () => setIsChatOpen(!isChatOpen), description: 'Toggle chat' },
+  ], !isImmersive);
+
   if (isImmersive) {
-    return <ImmersiveMode 
-      isListening={isListening}
-      transcriptEntries={transcriptEntries}
-      stream={stream}
-      themeColors={themeColors}
-      onExit={() => setIsImmersive(false)}
-      onToggleListen={isListening ? handleStop : handleStart}
-      onClear={handleClear}
-      avatarEmotion={avatarEmotion}
-      avatarMap={AVATAR_EMOTIONS}
-    />;
+    return (
+      <ErrorBoundary>
+        <ImmersiveMode 
+          isListening={isListening}
+          transcriptEntries={transcriptEntries}
+          stream={stream}
+          themeColors={themeColors}
+          onExit={() => setIsImmersive(false)}
+          onToggleListen={isListening ? handleStop : handleStart}
+          onClear={handleClear}
+          avatarEmotion={avatarEmotion}
+          avatarMap={AVATAR_EMOTIONS}
+        />
+      </ErrorBoundary>
+    );
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <CosmicBackground />
       <div className="fixed top-4 right-4 z-[100] w-full max-w-sm space-y-2">
         {toasts.map((toast) => <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />)}
       </div>
       
       {isChatOpen && <TranscriptChat transcript={fullTranscriptText} onClose={() => setIsChatOpen(false)} translationLanguage={translationLanguage} />}
+      <ExportModal 
+        isOpen={isExportModalOpen} 
+        onClose={() => setIsExportModalOpen(false)}
+        transcriptEntries={transcriptEntries}
+        speakerProfiles={speakerProfiles}
+      />
       
       <div className="h-screen text-slate-200 grid p-4 gap-4 relative z-20" style={{ gridTemplateColumns: `minmax(0, ${leftPanelWidth}px) 5px minmax(0, 1fr) 5px minmax(0, ${rightPanelWidth}px)` }}>
         <ControlPanel 
@@ -152,6 +180,7 @@ const App: React.FC = () => {
           translationLanguage={translationLanguage}
           setTranslationLanguage={setTranslationLanguage}
           onResetLayout={resetLayout}
+          onExport={() => setIsExportModalOpen(true)}
         />
 
         <div className="resizer-handle" onMouseDown={() => handleMouseDown('left')} />
@@ -190,7 +219,7 @@ const App: React.FC = () => {
           speakerProfiles={speakerProfiles}
         />
       </div>
-    </>
+    </ErrorBoundary>
   );
 };
 

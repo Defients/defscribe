@@ -1,11 +1,7 @@
-import React, { useRef, useEffect, useCallback } from 'react';
 
-// Augment the global Window interface to include webkitAudioContext for Safari compatibility
-declare global {
-  interface Window {
-    webkitAudioContext: typeof AudioContext;
-  }
-}
+import React, { useRef, useEffect, useCallback } from 'react';
+import { AudioContextManager } from '../utils/AudioContextManager';
+import { AUDIO_CONSTANTS } from '../constants/audio';
 
 interface VisualizerProps {
   isListening: boolean;
@@ -19,7 +15,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
   const analyser = useRef<AnalyserNode | null>(null);
   const dataArray = useRef<Uint8Array | null>(null);
   const frequencyArray = useRef<Uint8Array | null>(null);
-  const audioContext = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const idleTime = useRef(0);
 
   const drawIdle = useCallback(() => {
@@ -84,12 +80,11 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
     const freqData = frequencyArray.current;
     const timeData = dataArray.current;
 
-    // Layer 1: Low-frequency energy bars (background)
     const barCount = 32;
     const barWidth = width / barCount;
     ctx.globalAlpha = 0.4;
     for (let i = 0; i < barCount; i++) {
-        const freqIndex = Math.floor(i * (bufferLength / barCount) * 0.2); // Only use lower 20% of frequencies
+        const freqIndex = Math.floor(i * (bufferLength / barCount) * 0.2);
         const barHeight = (freqData[freqIndex] / 255) * height * 0.5;
         const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
         gradient.addColorStop(0, `rgba(${secondaryRgb}, 0.1)`);
@@ -99,7 +94,6 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
     }
     ctx.globalAlpha = 1;
 
-    // Layer 2: Core waveform (mid-ground)
     const sliceWidth = width * 1.0 / bufferLength;
     const drawWave = (lineWidth: number, strokeStyle: string | CanvasGradient, shadowBlur: number, shadowColor: string) => {
         ctx.lineWidth = lineWidth;
@@ -124,13 +118,12 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
     mainGradient.addColorStop(1, themeColors.accent);
     drawWave(2, mainGradient, 15, themeColors.primary);
     
-    // Layer 3: High-frequency particles (foreground)
     ctx.shadowBlur = 0;
-    for (let i = Math.floor(bufferLength * 0.4); i < bufferLength; i += 5) { // Use upper 60% of frequencies
+    for (let i = Math.floor(bufferLength * 0.4); i < bufferLength; i += 5) {
         const freqValue = freqData[i];
-        if (freqValue > 190) { // Threshold
+        if (freqValue > 190) {
             const x = (i / bufferLength) * width;
-            const y = (1 - (freqValue / 255)) * height * 0.8 + (height * 0.1); // Constrain particles to middle 80%
+            const y = (1 - (freqValue / 255)) * height * 0.8 + (height * 0.1);
             const radius = (freqValue / 255) * 1.5;
             const alpha = (freqValue - 190) / 65;
             ctx.beginPath();
@@ -144,20 +137,18 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
   }, [themeColors]);
 
   useEffect(() => {
-    if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-        animationFrameId.current = null;
-    }
-    
+    let contextAcquired = false;
     if (isListening && stream) {
-        if (!audioContext.current || audioContext.current.state === 'closed') {
-            audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        analyser.current = audioContext.current.createAnalyser();
-        const source = audioContext.current.createMediaStreamSource(stream);
+        const audioContext = AudioContextManager.acquire('visualizer');
+        contextAcquired = true;
+
+        analyser.current = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(stream);
+        sourceNodeRef.current = source;
         source.connect(analyser.current);
-        analyser.current.fftSize = 2048;
-        analyser.current.smoothingTimeConstant = 0.85;
+        
+        analyser.current.fftSize = AUDIO_CONSTANTS.FFT_SIZE;
+        analyser.current.smoothingTimeConstant = AUDIO_CONSTANTS.SMOOTHING_TIME_CONSTANT;
         dataArray.current = new Uint8Array(analyser.current.frequencyBinCount);
         frequencyArray.current = new Uint8Array(analyser.current.frequencyBinCount);
         
@@ -170,10 +161,15 @@ const Visualizer: React.FC<VisualizerProps> = ({ isListening, stream, themeColor
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
-      analyser.current?.disconnect();
-      if (stream) { // Only close context if we created it for a stream
-        audioContext.current?.close().catch(console.error);
-        audioContext.current = null;
+      if(sourceNodeRef.current){
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
+      }
+      if(analyser.current) {
+        analyser.current.disconnect();
+      }
+      if (contextAcquired) {
+        AudioContextManager.release('visualizer');
       }
     };
   }, [isListening, stream, drawActive, drawIdle]);

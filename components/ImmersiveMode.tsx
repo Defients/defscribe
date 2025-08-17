@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { type TranscriptEntry, type Emotion } from '../types';
-import { STOP_WORDS } from '../constants';
+import { STOP_WORDS, PHYSICS_CONSTANTS } from '../constants';
 import Tooltip from './Tooltip';
 
 interface ImmersiveModeProps {
@@ -25,9 +26,9 @@ type WordBubble = {
   y: number;
   vx: number;
   vy: number;
-  size: number; // Represents mass
-  width: number; // For collision, from DOM
-  height: number; // For collision, from DOM
+  size: number;
+  width: number;
+  height: number;
   element: HTMLDivElement | null;
   isExiting?: boolean;
 };
@@ -35,7 +36,6 @@ type WordBubble = {
 type VisualizerType = 'waveform' | 'bars';
 type BackgroundType = 'starfield' | 'digitalRain' | 'none';
 
-// --- Word Classification ---
 const ACTION_WORDS = new Set(['do', 'make', 'go', 'get', 'take', 'start', 'stop', 'try', 'create', 'build', 'run', 'move', 'think', 'analyze']);
 const DESCRIPTIVE_WORDS = new Set(['good', 'bad', 'great', 'small', 'big', 'new', 'old', 'beautiful', 'important', 'different', 'easy', 'hard']);
 const QUESTION_WORDS = new Set(['who', 'what', 'when', 'where', 'why', 'how', 'which', 'is', 'are', 'do', 'does', 'can', 'could']);
@@ -57,8 +57,6 @@ const wordTypeStyles: Record<WordType, { background: string; border: string; box
   important: { background: 'rgba(167, 119, 255, 0.3)', border: '1px solid rgba(167, 119, 255, 0.6)', boxShadow: '0 0 15px rgba(167, 119, 255, 0.6)' },
 };
 
-
-// --- Shared Audio Processing Hook ---
 const useAudioProcessor = (isListening: boolean, stream: MediaStream | null) => {
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
@@ -81,7 +79,7 @@ const useAudioProcessor = (isListening: boolean, stream: MediaStream | null) => 
 
         return () => {
             sourceRef.current?.disconnect();
-            sourceRef.current = null; // Allow reconnection on next stream
+            sourceRef.current = null;
             if (stream === null && audioContextRef.current && audioContextRef.current.state !== 'closed') {
                 audioContextRef.current.close().catch(console.error);
                 analyserRef.current = null;
@@ -91,9 +89,6 @@ const useAudioProcessor = (isListening: boolean, stream: MediaStream | null) => 
     
     return { analyser: analyserRef.current };
 };
-
-
-// --- Immersive UI Components ---
 
 const AnimatedTranscriptLine: React.FC<{ text: string }> = ({ text }) => {
     return (
@@ -144,7 +139,7 @@ const StarfieldBackground: React.FC<{ analyser: AnalyserNode | null }> = React.m
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 analyser.getByteFrequencyData(dataArray);
                 const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                warpFactor = (avg / 255) * 10; // Increase speed based on volume
+                warpFactor = (avg / 255) * 10;
             }
             
             ctx.fillStyle = "rgba(5, 8, 10, 1)";
@@ -154,7 +149,7 @@ const StarfieldBackground: React.FC<{ analyser: AnalyserNode | null }> = React.m
 
             for (let i = 0; i < numStars; i++) {
                 let star = stars[i];
-                star.z -= (1 + warpFactor); // Apply warp factor
+                star.z -= (1 + warpFactor);
                 if (star.z <= 0) {
                     star.z = canvas.width;
                 }
@@ -233,7 +228,6 @@ const DigitalRainBackground: React.FC<{ themeColors: { accent: string } }> = Rea
     return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full z-0" />;
 });
 
-
 const CosmicRippleVisualizer: React.FC<{ analyser: AnalyserNode | null }> = React.memo(({ analyser }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     
@@ -262,10 +256,10 @@ const CosmicRippleVisualizer: React.FC<{ analyser: AnalyserNode | null }> = Reac
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 analyser.getByteFrequencyData(dataArray);
                 const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                if (avg > 30 && ripples.length < 20) { // Threshold to trigger a ripple
+                if (avg > 30 && ripples.length < 20) {
                     ripples.push({
                         x: canvas.width / 2,
-                        y: 150, // Approx avatar y position
+                        y: 150,
                         radius: 50 + avg,
                         alpha: 0.8,
                         speed: 1 + (avg / 128)
@@ -393,7 +387,6 @@ const EnhancedVisualizer: React.FC<{ analyser: AnalyserNode | null; themeColors:
     return <canvas ref={canvasRef} className="w-full h-full" />;
 });
 
-
 const MenuButton: React.FC<{text: string; onClick: () => void; icon: string; isSpecial?: 'red' | 'green'; isActive?: boolean;}> = ({text, onClick, icon, isSpecial, isActive}) => (
     <Tooltip text={text} position="bottom">
         <button onClick={onClick} className={`w-20 h-16 text-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 rounded-xl
@@ -407,9 +400,6 @@ const MenuButton: React.FC<{text: string; onClick: () => void; icon: string; isS
         </button>
     </Tooltip>
 );
-
-
-// --- Main Immersive Mode Component ---
 
 const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEntries, stream, themeColors, onExit, onToggleListen, onClear, avatarEmotion, avatarMap }) => {
   const [bubbles, setBubbles] = useState<WordBubble[]>([]);
@@ -425,7 +415,7 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
   const [avatarGlow, setAvatarGlow] = useState(0);
 
   const bubblesRef = useRef<WordBubble[]>([]);
-  const animationFrameRef = useRef<any>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const lastTranscriptLength = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const avatarRef = useRef<HTMLImageElement>(null);
@@ -444,9 +434,7 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
 
   useEffect(() => {
     document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-        document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    }
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
   useEffect(() => {
@@ -497,85 +485,107 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
   }, [transcriptEntries]);
 
   useEffect(() => {
-    const animate = () => {
+    let lastTime = performance.now();
+    let accumulator = 0;
+
+    const updatePhysics = () => {
+        const currentBubbles = bubblesRef.current;
+        const avatarEl = avatarRef.current;
+        const avatarRect = showAvatar && avatarEl ? avatarEl.getBoundingClientRect() : null;
+        const avatar = avatarRect ? { x: avatarRect.left + avatarRect.width / 2, y: avatarRect.top + avatarRect.height / 2, radius: avatarRect.width / 2 } : null;
+
+        const centersOfMass: Record<WordType, { x: number; y: number; count: number }> = {
+            action: { x: 0, y: 0, count: 0 }, descriptive: { x: 0, y: 0, count: 0 }, question: { x: 0, y: 0, count: 0 },
+            important: { x: 0, y: 0, count: 0 }, default: { x: 0, y: 0, count: 0 },
+        };
+
+        currentBubbles.forEach(b => {
+            if (b.isExiting) return;
+            centersOfMass[b.type].x += b.x; centersOfMass[b.type].y += b.y; centersOfMass[b.type].count++;
+        });
+        for (const type in centersOfMass) {
+            const com = centersOfMass[type as WordType];
+            if (com.count > 0) { com.x /= com.count; com.y /= com.count; }
+        }
+
+        currentBubbles.forEach((b1, i) => {
+            if (b1.isExiting) return;
+            
+            const com = centersOfMass[b1.type];
+            if (com.count > 1) {
+                const dx = com.x - b1.x; const dy = com.y - b1.y; const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 50) {
+                    b1.vx += (dx / distance) * PHYSICS_CONSTANTS.GRAVITY * b1.size; b1.vy += (dy / distance) * PHYSICS_CONSTANTS.GRAVITY * b1.size;
+                }
+            }
+
+            b1.vx *= PHYSICS_CONSTANTS.DAMPING; b1.vy *= PHYSICS_CONSTANTS.DAMPING; b1.vy += 0.02;
+            b1.x += b1.vx; b1.y += b1.vy;
+            const radius = Math.max(b1.width, b1.height) / 2;
+            if (!radius) return;
+
+            if (b1.x < radius) { b1.x = radius; b1.vx *= -PHYSICS_CONSTANTS.BOUNCE_DAMPING; }
+            if (b1.x > window.innerWidth - radius) { b1.x = window.innerWidth - radius; b1.vx *= -PHYSICS_CONSTANTS.BOUNCE_DAMPING; }
+            if (b1.y < radius) { b1.y = radius; b1.vy *= -PHYSICS_CONSTANTS.BOUNCE_DAMPING; }
+            if (b1.y > window.innerHeight + 100) { b1.isExiting = true; setTimeout(() => setBubbles(prev => prev.filter(b => b.id !== b1.id)), 300); }
+            
+            if (avatar) {
+                const dx = b1.x - avatar.x; const dy = b1.y - avatar.y; const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance < avatar.radius + radius) {
+                    const angle = Math.atan2(dy, dx); const overlap = (avatar.radius + radius) - distance;
+                    b1.x += Math.cos(angle) * overlap; b1.y += Math.sin(angle) * overlap;
+                    const normalX = dx / distance; const normalY = dy / distance; const dotProduct = (b1.vx * normalX + b1.vy * normalY);
+                    b1.vx -= 2 * dotProduct * normalX; b1.vy -= 2 * dotProduct * normalY;
+                }
+            }
+            
+            for (let j = i + 1; j < currentBubbles.length; j++) {
+                const b2 = currentBubbles[j]; if (b2.isExiting) continue;
+                const dx = b2.x - b1.x; const dy = b2.y - b1.y; const distance = Math.sqrt(dx * dx + dy * dy);
+                const minDist = (Math.max(b1.width, b1.height) / 2) + (Math.max(b2.width, b2.height) / 2);
+                if (distance < minDist) {
+                    const angle = Math.atan2(dy, dx); const overlap = (minDist - distance) * 0.5;
+                    b1.x -= Math.cos(angle) * overlap; b1.y -= Math.sin(angle) * overlap;
+                    b2.x += Math.cos(angle) * overlap; b2.y += Math.sin(angle) * overlap;
+                    const force = (minDist - distance) * 0.05; const ax = (dx / distance) * force; const ay = (dy / distance) * force;
+                    b1.vx -= ax; b1.vy -= ay; b2.vx += ax; b2.vy += ay;
+                }
+            }
+        });
+    };
+
+    const render = () => {
       if (analyser) {
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
         const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
         setAvatarGlow(avg / 255);
       } else {
-        setAvatarGlow(g => Math.max(0, g * 0.95)); // Fade out glow
+        setAvatarGlow(g => Math.max(0, g * 0.95));
       }
-
-      const currentBubbles = bubblesRef.current;
-      const avatarEl = avatarRef.current;
-      const avatarRect = showAvatar && avatarEl ? avatarEl.getBoundingClientRect() : null;
-      const avatar = avatarRect ? { x: avatarRect.left + avatarRect.width / 2, y: avatarRect.top + avatarRect.height / 2, radius: avatarRect.width / 2 } : null;
-
-      const centersOfMass: Record<WordType, { x: number; y: number; count: number }> = {
-          action: { x: 0, y: 0, count: 0 }, descriptive: { x: 0, y: 0, count: 0 }, question: { x: 0, y: 0, count: 0 },
-          important: { x: 0, y: 0, count: 0 }, default: { x: 0, y: 0, count: 0 },
-      };
-
-      currentBubbles.forEach(b => {
-          if (b.isExiting) return;
-          centersOfMass[b.type].x += b.x; centersOfMass[b.type].y += b.y; centersOfMass[b.type].count++;
+      
+      bubblesRef.current.forEach(b => {
+          if (b.element) {
+              b.element.style.transform = `translate(${b.x - b.width/2}px, ${b.y - b.height/2}px)`;
+          }
       });
-      for (const type in centersOfMass) {
-          const com = centersOfMass[type as WordType];
-          if (com.count > 0) { com.x /= com.count; com.y /= com.count; }
-      }
-
-      currentBubbles.forEach((b1, i) => {
-        if (b1.isExiting) return;
-        
-        const com = centersOfMass[b1.type];
-        if (com.count > 1) {
-            const dx = com.x - b1.x; const dy = com.y - b1.y; const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance > 50) {
-                const gravity = 0.0001;
-                b1.vx += (dx / distance) * gravity * b1.size; b1.vy += (dy / distance) * gravity * b1.size;
-            }
-        }
-
-        b1.vx *= 0.99; b1.vy *= 0.99; b1.vy += 0.02;
-        b1.x += b1.vx; b1.y += b1.vy;
-        const radius = Math.max(b1.width, b1.height) / 2;
-        if (!radius) return;
-
-        if (b1.x < radius) { b1.x = radius; b1.vx *= -0.8; }
-        if (b1.x > window.innerWidth - radius) { b1.x = window.innerWidth - radius; b1.vx *= -0.8; }
-        if (b1.y < radius) { b1.y = radius; b1.vy *= -0.8; }
-        if (b1.y > window.innerHeight + 100) { b1.isExiting = true; setTimeout(() => setBubbles(prev => prev.filter(b => b.id !== b1.id)), 300); }
-        
-        if (avatar) {
-            const dx = b1.x - avatar.x; const dy = b1.y - avatar.y; const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < avatar.radius + radius) {
-                const angle = Math.atan2(dy, dx); const overlap = (avatar.radius + radius) - distance;
-                b1.x += Math.cos(angle) * overlap; b1.y += Math.sin(angle) * overlap;
-                const normalX = dx / distance; const normalY = dy / distance; const dotProduct = (b1.vx * normalX + b1.vy * normalY);
-                b1.vx -= 2 * dotProduct * normalX; b1.vy -= 2 * dotProduct * normalY;
-            }
-        }
-        
-        for (let j = i + 1; j < currentBubbles.length; j++) {
-            const b2 = currentBubbles[j]; if (b2.isExiting) continue;
-            const dx = b2.x - b1.x; const dy = b2.y - b1.y; const distance = Math.sqrt(dx * dx + dy * dy);
-            const minDist = (Math.max(b1.width, b1.height) / 2) + (Math.max(b2.width, b2.height) / 2);
-            if (distance < minDist) {
-                const angle = Math.atan2(dy, dx); const overlap = (minDist - distance) * 0.5;
-                b1.x -= Math.cos(angle) * overlap; b1.y -= Math.sin(angle) * overlap;
-                b2.x += Math.cos(angle) * overlap; b2.y += Math.sin(angle) * overlap;
-                const force = (minDist - distance) * 0.05; const ax = (dx / distance) * force; const ay = (dy / distance) * force;
-                b1.vx -= ax; b1.vy -= ay; b2.vx += ax; b2.vy += ay;
-            }
-        }
-
-        if (b1.element) b1.element.style.transform = `translate(${b1.x - b1.width/2}px, ${b1.y - b1.height/2}px)`;
-      });
-      animationFrameRef.current = requestAnimationFrame(animate);
     };
-    animationFrameRef.current = requestAnimationFrame(animate);
+
+    const gameLoop = (currentTime: number) => {
+        const deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+        accumulator += deltaTime;
+
+        while (accumulator >= PHYSICS_CONSTANTS.TIMESTEP_MS) {
+            updatePhysics();
+            accumulator -= PHYSICS_CONSTANTS.TIMESTEP_MS;
+        }
+
+        render();
+        animationFrameRef.current = requestAnimationFrame(gameLoop);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(gameLoop);
     return () => { if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current); };
   }, [showAvatar, analyser]);
   
@@ -593,7 +603,6 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
       {backgroundType === 'digitalRain' && <DigitalRainBackground themeColors={themeColors} />}
       <CosmicRippleVisualizer analyser={analyser} />
       
-      {/* --- Controls --- */}
       {isMenuOpen ? (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] transition-all duration-500 ease-in-out`}>
             <div className="flex flex-col items-center gap-3 p-3 bg-black/30 backdrop-blur-md rounded-2xl border border-slate-700/50" style={{ filter: `drop-shadow(0 0 10px rgba(var(--color-primary-rgb), 0.5))` }}>
@@ -639,7 +648,6 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
           </div>
       )}
       
-      {/* Avatar */}
       {showAvatar && (
         <img
             ref={avatarRef}
@@ -655,7 +663,6 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
         />
       )}
 
-      {/* Word Bubbles */}
       <div className="absolute inset-0 z-30 pointer-events-none">
         {bubbles.map(b => (
           <div
@@ -677,7 +684,6 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
         ))}
       </div>
 
-      {/* Transcript Area */}
       <div className="absolute inset-0 flex flex-col items-center justify-end pointer-events-none z-50 pb-48">
         <div className="w-full max-w-4xl text-center space-y-2 p-4">
           <div className="h-48 text-2xl text-slate-400 space-y-2 overflow-hidden flex flex-col justify-end">
@@ -692,7 +698,6 @@ const ImmersiveMode: React.FC<ImmersiveModeProps> = ({ isListening, transcriptEn
         </div>
       </div>
 
-      {/* Visualizer */}
       <div className="absolute bottom-0 left-0 right-0 h-48 z-20 pointer-events-none">
         <EnhancedVisualizer analyser={analyser} themeColors={themeColors} type={visualizerType} />
       </div>

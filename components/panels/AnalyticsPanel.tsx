@@ -149,7 +149,7 @@ const TabButton: React.FC<{name: string, tab: ActiveTab, activeTab: ActiveTab, o
 );
 
 const EmptyState: React.FC<{icon: string, text: string}> = ({ icon, text }) => (
-    <div className="flex flex-col items-center justify-center text-slate-500 h-full p-6 text-center">
+    <div className="flex flex-col items-center justify-center text-slate-400 h-full p-6 text-center">
         <i className={`fas ${icon} text-3xl mb-3`}></i>
         <p>{text}</p>
     </div>

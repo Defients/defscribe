@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import Visualizer from '../Visualizer';
 import TranscriptDisplay from '../TranscriptDisplay';
@@ -32,7 +33,6 @@ const MainContentPanel: React.FC<MainContentPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [editingSpeaker, setEditingSpeaker] = useState<SpeakerProfile | null>(null);
 
-  // --- Auto-scroll state and refs ---
   const [autoScroll, setAutoScroll] = useState(true);
   const [newContentSinceScroll, setNewContentSinceScroll] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,7 +46,6 @@ const MainContentPanel: React.FC<MainContentPanelProps> = ({
     setTranscriptTextSize(transcriptTextSize === 'base' ? 'lg' : transcriptTextSize === 'lg' ? 'sm' : 'base');
   };
 
-  // Effect to scroll or flag new content
   useEffect(() => {
     const newContentCount = transcriptEntries.length + (liveText ? 1 : 0);
     const hasNewContent = newContentCount > lastTranscriptLength.current;
@@ -62,7 +61,6 @@ const MainContentPanel: React.FC<MainContentPanelProps> = ({
     lastTranscriptLength.current = newContentCount;
   }, [transcriptEntries, liveText, autoScroll]);
 
-  // Effect to detect user scrolling
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -91,14 +89,25 @@ const MainContentPanel: React.FC<MainContentPanelProps> = ({
 
   const handleAutoScrollClick = () => {
     setAutoScroll(true);
-    // The useEffect hook will handle the scrolling logic
   };
 
   const highlightText = (text: string, query: string): React.ReactNode => {
-    if (!query) return text;
-    const parts = text.split(new RegExp(`(${query})`, 'gi'));
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase() ? <mark key={i}>{part}</mark> : part
+    if (!query.trim()) {
+      return text;
+    }
+    const escapedQuery = query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const queryRegex = new RegExp(`(${escapedQuery})`, 'gi');
+    const parts = text.split(queryRegex);
+
+    return (
+        <>
+            {parts.map((part, index) => {
+                if (part.toLowerCase() === query.toLowerCase()) {
+                    return <mark key={index}>{part}</mark>;
+                }
+                return part;
+            })}
+        </>
     );
   };
   

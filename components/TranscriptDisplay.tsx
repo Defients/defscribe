@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { type TranscriptEntry, type SpeakerProfile, type SpeakerId } from '../types';
 import Tooltip from './Tooltip';
 
@@ -27,29 +27,74 @@ interface ActionsMenuProps {
 }
 
 const ActionsMenu: React.FC<ActionsMenuProps> = ({ entry, speakerProfiles, onTranslate, onReassign, onClose }) => {
-    const [showSpeakers, setShowSpeakers] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const [copied, setCopied] = useState(false);
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [onClose]);
+
+    const handleTranslate = () => {
+        onTranslate(entry.id);
+        onClose();
+    };
     
+    const handleCopy = () => {
+        navigator.clipboard.writeText(entry.text).then(() => {
+            setCopied(true);
+            setTimeout(() => {
+                onClose();
+            }, 1000);
+        });
+    };
+
     const handleReassign = (newSpeakerId: SpeakerId) => {
         onReassign(entry.id, newSpeakerId);
         onClose();
     };
 
     return (
-        <div className="absolute right-2 top-8 z-40 bg-slate-800 border border-slate-600 rounded-lg shadow-xl animate-[fadeIn_0.1s_ease-out]">
-            <ul className="text-sm text-slate-200">
-                <li><button onClick={() => onTranslate(entry.id)} className="w-full text-left px-3 py-2 hover:bg-slate-700/50 flex items-center gap-2 rounded-t-lg"><i className="fas fa-language w-4"></i> Translate</button></li>
-                <li className="relative">
-                    <button onClick={() => setShowSpeakers(p => !p)} className="w-full text-left px-3 py-2 hover:bg-slate-700/50 flex items-center gap-2 rounded-b-lg"><i className="fas fa-user-edit w-4"></i> Reassign</button>
-                    {showSpeakers && (
-                        <div className="absolute right-full top-0 mr-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl p-1 animate-[fadeIn_0.1s_ease-out]">
-                            {Object.values(speakerProfiles).map(p => (
-                                <button key={p.id} onClick={() => handleReassign(p.id)} className="w-full text-left px-3 py-1 hover:bg-slate-700/50 rounded-md flex items-center gap-2 whitespace-nowrap">
-                                    <div className="w-4 h-4 rounded-full" style={{backgroundColor: p.color}} />
-                                    {p.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+        <div 
+            ref={menuRef}
+            className="absolute right-2 top-8 z-40 w-48 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-lg shadow-2xl animate-[fadeIn_0.1s_ease-out]"
+        >
+            <ul className="text-sm text-slate-200 divide-y divide-slate-700/50">
+                <li>
+                    <button onClick={handleTranslate} className="w-full text-left px-3 py-2 hover:bg-slate-700/50 flex items-center gap-3 transition-colors rounded-t-lg">
+                        <i className="fas fa-language w-4 text-center text-[var(--color-primary)]"></i> 
+                        <span>Translate</span>
+                    </button>
+                </li>
+                <li>
+                    <button onClick={handleCopy} className="w-full text-left px-3 py-2 hover:bg-slate-700/50 flex items-center gap-3 transition-colors">
+                        <i className={`fas ${copied ? 'fa-check text-green-400' : 'fa-copy'} w-4 text-center text-[var(--color-primary)]`}></i> 
+                        <span>{copied ? 'Copied!' : 'Copy Text'}</span>
+                    </button>
+                </li>
+                
+                <li className="p-2">
+                    <p className="text-xs text-slate-400 font-semibold mb-1 px-1">Reassign to:</p>
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {Object.values(speakerProfiles).map(p => (
+                            <button 
+                                key={p.id} 
+                                onClick={() => handleReassign(p.id)} 
+                                className="w-full text-left px-2 py-1.5 hover:bg-slate-700/50 rounded-md flex items-center gap-2 whitespace-nowrap transition-colors"
+                            >
+                                <div className="w-4 h-4 rounded-full flex-shrink-0" style={{backgroundColor: p.color}} />
+                                <span className="flex-1 truncate">{p.label}</span>
+                            </button>
+                        ))}
+                    </div>
                 </li>
             </ul>
         </div>
@@ -85,21 +130,8 @@ const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
   const [activeMenuEntryId, setActiveMenuEntryId] = useState<string | null>(null);
   const textSizeClasses = { sm: 'text-sm', base: 'text-base', lg: 'text-lg' };
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      // Find if the click was inside a menu trigger button
-      const target = event.target as HTMLElement;
-      if (!target.closest('.actions-menu-trigger')) {
-        setActiveMenuEntryId(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-
   return (
-    <div ref={containerRef} className="overflow-y-auto flex-1 pr-2 min-h-0">
+    <div ref={containerRef} className="h-full overflow-y-auto pr-2">
       {entries.map((entry) => (
         <div key={entry.id} className="relative flex items-start gap-3 p-2 rounded-lg hover:bg-slate-800/50 transition-colors fade-in-entry pb-4 group">
             {showTimestamps && (
@@ -154,10 +186,13 @@ const TranscriptDisplay: React.FC<TranscriptDisplayProps> = ({
       )}
       
       {isListening && liveTextState !== 'hidden' && (
-          <div className={`group relative flex items-start gap-3 p-2 rounded-lg text-slate-400 transition-all duration-500 ease-out 
-            ${liveTextState === 'fading-out' ? 'opacity-0' : 'opacity-100'}
-            ${activeSpeaker ? 'border-l-4' : ''}`}
+          <div 
+            className={`group relative flex items-start gap-3 p-2 rounded-lg text-slate-400 transition-all duration-500 ease-out 
+              ${liveTextState === 'fading-out' ? 'opacity-0' : 'opacity-100'}
+              ${activeSpeaker ? 'border-l-4' : ''}`}
             style={{ borderLeftColor: activeSpeaker && speakerProfiles[activeSpeaker] ? speakerProfiles[activeSpeaker].color : 'transparent' }}
+            aria-live="polite"
+            aria-atomic="true"
           >
               {showTimestamps && (
                   <div className="w-24 flex-shrink-0 pt-1">

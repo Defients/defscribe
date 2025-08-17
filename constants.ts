@@ -1,6 +1,6 @@
 
-
 import { type Emotion } from './types';
+export { PHYSICS_CONSTANTS } from './constants/audio';
 
 export const FILLER_WORDS: Set<string> = new Set([
   "um", "uh", "like", "you know", "sort of", "kind of", "basically",

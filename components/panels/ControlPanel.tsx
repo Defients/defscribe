@@ -24,6 +24,7 @@ interface ControlPanelProps {
   translationLanguage: string;
   setTranslationLanguage: (lang: string) => void;
   onResetLayout: () => void;
+  onExport: () => void;
 }
 
 const IconButton: React.FC<{ icon: string; text: string; onClick: () => void; className?: string; disabled?: boolean; }> = ({ icon, text, onClick, className = '', disabled }) => (
@@ -44,7 +45,7 @@ const IconButton: React.FC<{ icon: string; text: string; onClick: () => void; cl
 const ControlPanel: React.FC<ControlPanelProps> = ({
   isListening, isAnalyzing, isSummarizing, wpm, onStart, onStop, onClear, onGoImmersive, isImmersiveButtonGlowing,
   themeId, setThemeId, diarizationSettings, setDiarizationSettings, showTimestamps, setShowTimestamps,
-  translationLanguage, setTranslationLanguage, onResetLayout
+  translationLanguage, setTranslationLanguage, onResetLayout, onExport
 }) => {
   return (
     <div className="flex flex-col h-full cosmo-panel rounded-2xl p-4 gap-4 overflow-y-auto">
@@ -59,6 +60,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         ) : (
           <IconButton icon="fa-stop-circle" text="Stop Listening" onClick={onStop} className="bg-red-600/80 hover:bg-red-600/100 shadow-lg animate-recording-glow" />
         )}
+        <IconButton icon="fa-file-export" text="Export Transcript" onClick={onExport} disabled={isListening} className="control-button" />
         <IconButton icon="fa-trash-alt" text="Clear Session" onClick={onClear} disabled={isListening} className="control-button" />
         <IconButton
             icon="fa-rocket"
@@ -86,6 +88,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                             onClick={() => setThemeId(Number(id))}
                             className={`h-8 w-full rounded-lg transition-all duration-200 ${Number(id) === themeId ? 'ring-2 ring-offset-2 ring-offset-[var(--color-bg-deep)] ring-white' : ''}`}
                             style={{ background: `linear-gradient(to right, ${theme.primary}, ${theme.secondary}, ${theme.accent})` }}
+                            aria-label={`Select Theme ${id}`}
                         />
                     </Tooltip>
                 ))}

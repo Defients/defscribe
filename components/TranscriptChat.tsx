@@ -1,20 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GoogleGenAI, Chat } from "@google/genai";
 import { type ChatMessage } from '../types';
 import Tooltip from './Tooltip';
 import { translateText } from '../services/geminiService';
-
-const API_KEY = typeof process !== 'undefined' && process.env?.API_KEY;
-let ai: GoogleGenAI | null = null;
-if (API_KEY) {
-    try {
-        ai = new GoogleGenAI({ apiKey: API_KEY });
-    } catch (e) {
-        console.error("Failed to initialize GoogleGenAI for chat.", e);
-    }
-} else {
-    console.warn("Gemini API key not found. Chat feature will be disabled.");
-}
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface TranscriptChatProps {
   transcript: string;
@@ -26,6 +14,7 @@ const TranscriptChat: React.FC<TranscriptChatProps> = ({ transcript, onClose, tr
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isBackendError, setIsBackendError] = useState(false);
   
   // --- UX State ---
   const [autoScroll, setAutoScroll] = useState(true);
@@ -34,32 +23,26 @@ const TranscriptChat: React.FC<TranscriptChatProps> = ({ transcript, onClose, tr
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [isTranslatingId, setIsTranslatingId] = useState<string | null>(null);
 
-  const chatRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  useFocusTrap(chatContainerRef, true);
 
   // --- UX Constants ---
   const textSizeClasses = { sm: 'text-sm', base: 'text-base', lg: 'text-lg' };
   const textSizeLabels = { sm: 'Small', base: 'Medium', lg: 'Large' };
   const nextTextSizeLabel = { sm: 'Medium', base: 'Large', lg: 'Small' };
-
-  const initializeChat = () => {
-     if (!ai) return;
-     chatRef.current = ai.chats.create({
-        model: 'gemini-2.5-flash',
-        config: {
-          systemInstruction: `You are an intelligent assistant that answers questions based ONLY on the provided transcript. The transcript is a record of a conversation. Your task is to be helpful and accurate. Do not make up information. If the answer is not in the transcript, say so. \n\n--- TRANSCRIPT ---\n${transcript}`,
-        },
-      });
-  };
-
+  
   useEffect(() => {
-    if (transcript) {
-      initializeChat();
-      setMessages([]);
-      setAutoScroll(true);
-    }
-  }, [transcript]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            onClose();
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
   
   useEffect(() => {
     if (autoScroll) {
@@ -95,43 +78,69 @@ const TranscriptChat: React.FC<TranscriptChatProps> = ({ transcript, onClose, tr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !chatRef.current) return;
+    if (!input.trim() || isLoading) return;
 
     setAutoScroll(true);
     
     const userMessage: ChatMessage = { id: `user-${Date.now()}`, role: 'user', text: input };
-    const modelMessage: ChatMessage = { id: `model-${Date.now()}`, role: 'model', text: '', isLoading: true };
-    setMessages(prev => [...prev, userMessage, modelMessage]);
+    const previousMessages = messages.filter(m => !m.isLoading);
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
-    let streamingStarted = false;
+    const modelMessageId = `model-${Date.now()}`;
+    setMessages(prev => [...prev, { id: modelMessageId, role: 'model', text: '', isLoading: true }]);
 
     try {
-      const result = await chatRef.current.sendMessageStream({ message: input });
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: transcript,
+          history: previousMessages,
+          newMessage: input
+        })
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Backend error: ${response.status} ${response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
       let fullText = '';
-      for await (const chunk of result) {
+      let streamingStarted = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
         if (!streamingStarted) {
             if (!autoScroll) setNewContent(true);
             streamingStarted = true;
         }
-        fullText += chunk.text;
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+
         setMessages(prev =>
           prev.map(msg =>
-            msg.id === modelMessage.id ? { ...msg, text: fullText } : msg
+            msg.id === modelMessageId ? { ...msg, text: fullText } : msg
           )
         );
       }
+      
       setMessages(prev =>
         prev.map(msg =>
-          msg.id === modelMessage.id ? { ...msg, isLoading: false } : msg
+          msg.id === modelMessageId ? { ...msg, isLoading: false } : msg
         )
       );
     } catch (error) {
       console.error("Chat error:", error);
+      setIsBackendError(true);
       setMessages(prev =>
         prev.map(msg =>
-          msg.id === modelMessage.id ? { ...msg, text: 'Sorry, I encountered an error.', isLoading: false } : msg
+          msg.id === modelMessageId ? { ...msg, text: 'Sorry, I could not connect to the backend.', isLoading: false } : msg
         )
       );
     } finally {
@@ -141,9 +150,7 @@ const TranscriptChat: React.FC<TranscriptChatProps> = ({ transcript, onClose, tr
 
   const handleClearChat = () => {
     setMessages([]);
-    if (transcript) {
-        initializeChat(); // Re-creates chat to clear server-side history
-    }
+    setIsBackendError(false);
   };
 
   const cycleTextSize = () => {
@@ -185,38 +192,42 @@ const TranscriptChat: React.FC<TranscriptChatProps> = ({ transcript, onClose, tr
   return (
     <div className="fixed inset-0 bg-black/50 z-[90] animate-[fadeIn_0.3s_ease-out]" onClick={onClose}>
       <div
+        ref={chatContainerRef}
         className="fixed bottom-0 right-0 h-[60vh] max-h-[600px] w-full max-w-2xl cosmo-panel border-t-2 border-[var(--color-primary)] rounded-t-2xl shadow-2xl flex flex-col animate-[char-slide-in_0.5s_ease-out]"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="chat-title"
       >
         <header className="flex-shrink-0 flex items-center justify-between p-4 border-b border-[rgba(var(--color-primary-rgb),0.2)]">
-          <h2 className="text-lg font-bold flex items-center gap-2"><i className="fas fa-comments text-[var(--color-primary)]"></i> Chat with Transcript</h2>
+          <h2 id="chat-title" className="text-lg font-bold flex items-center gap-2"><i className="fas fa-comments text-[var(--color-primary)]"></i> Chat with Transcript</h2>
           <div className="flex items-center gap-2">
             <Tooltip text="Clear Chat" position="bottom">
-              <button onClick={handleClearChat} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors cosmo-button"><i className="fas fa-trash-alt"></i></button>
+              <button aria-label="Clear chat history" onClick={handleClearChat} className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors cosmo-button"><i className="fas fa-trash-alt"></i></button>
             </Tooltip>
 
             <Tooltip text={`Change to ${nextTextSizeLabel[textSize]} text`} position="bottom">
-                <button onClick={cycleTextSize} className="h-8 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors cosmo-button">
+                <button aria-label={`Change text size to ${nextTextSizeLabel[textSize]}`} onClick={cycleTextSize} className="h-8 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors cosmo-button">
                     <i className="fas fa-text-height"></i>
                     <span className="text-xs font-semibold w-12 text-center">{textSizeLabels[textSize]}</span>
                 </button>
             </Tooltip>
 
             <Tooltip text={autoScroll ? "Auto-scroll On" : "Scroll to Bottom"} position="bottom">
-              <button onClick={handleAutoScrollClick} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 cosmo-button ${autoScroll ? 'text-[var(--color-primary)]' : `text-slate-400 ${newContent ? 'animate-cosmic-glow' : ''}`}`}>
+              <button aria-label={autoScroll ? "Disable auto-scroll" : "Scroll to bottom"} onClick={handleAutoScrollClick} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 cosmo-button ${autoScroll ? 'text-[var(--color-primary)]' : `text-slate-400 ${newContent ? 'animate-cosmic-glow' : ''}`}`}>
                 <i className={`fas ${autoScroll ? 'fa-anchor' : 'fa-arrow-down'}`}></i>
               </button>
             </Tooltip>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white transition-colors"><i className="fas fa-times"></i></button>
+            <button aria-label="Close chat" onClick={onClose} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white transition-colors"><i className="fas fa-times"></i></button>
           </div>
         </header>
 
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-          {!ai ? (
+          {isBackendError ? (
              <div className="text-center text-slate-400 p-6">
                 <i className="fas fa-exclamation-triangle text-4xl mb-3 text-amber-400"></i>
-                <p>Chat is disabled.</p>
-                <p className="text-sm">API key not configured.</p>
+                <p>Chat is unavailable.</p>
+                <p className="text-sm">Could not connect to the backend server.</p>
             </div>
           ) : messages.length === 0 ? (
             <div className="text-center text-slate-400 p-6">
@@ -260,11 +271,11 @@ const TranscriptChat: React.FC<TranscriptChatProps> = ({ transcript, onClose, tr
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={ai ? "Ask a question..." : "Chat is disabled"}
-              disabled={isLoading || !ai}
+              placeholder={isBackendError ? "Chat is unavailable" : "Ask a question..."}
+              disabled={isLoading || isBackendError}
               className="w-full cosmo-input rounded-lg py-3 pl-4 pr-12 text-sm focus:outline-none disabled:opacity-50"
             />
-            <button type="submit" disabled={isLoading || !input.trim() || !ai} className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-[var(--color-primary)] rounded-lg text-black flex items-center justify-center transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" disabled={isLoading || !input.trim() || isBackendError} className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-[var(--color-primary)] rounded-lg text-black flex items-center justify-center transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Send message">
               <i className="fas fa-paper-plane"></i>
             </button>
           </div>
